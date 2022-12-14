@@ -45,3 +45,22 @@ const AutoCompletionProvider = new class implements vscode.CompletionItemProvide
 		return keywords;
 	}
 };
+
+// This handler provides the initial list of the completion items from AutoCompletionProvider
+connection.onCompletion(
+	(_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
+		const document = documents.get(_textDocumentPosition.textDocument.uri);
+		if (document) {
+			const position = _textDocumentPosition.position;
+			const line = document.lineAt(position.line);
+			const lineText = line.text.substring(0, position.character);
+			const match = lineText.match(/(?<=\$)\w*$/);
+			if (match) {
+				const word = match[0];
+				const completionItems = AutoCompletionProvider.getCompletionItems(word);
+				return completionItems;
+			}
+		}
+		return [];
+	}
+);

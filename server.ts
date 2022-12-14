@@ -1,22 +1,148 @@
 import * as vscode from 'vscode';
 import { PHoverProvider } from './hoverProvider';
 import { PErrorCheckingProvider } from './errorcheckProvider';
-import { PKeywordCompletionProvider } from './autocompletionProvider';
+import { AutocompletionProvider } from './autocompletionProvider';
+import {
+	createConnection,
+	TextDocuments,
+	Diagnostic,
+	DiagnosticSeverity,
+	ProposedFeatures,
+	InitializeParams,
+	DidChangeConfigurationNotification,
+	CompletionItem,
+	CompletionItemKind,
+	TextDocumentPositionParams,
+	TextDocumentSyncKind,
+	InitializeResult,
+} from 'vscode-languageserver/node';
 
-// Create an instance of the PErrorCheckingProvider
-const errorCheckingProvider = new PErrorCheckingProvider();
+import {
+	TextDocument
+} from 'vscode-languageserver-textdocument';
 
-// Create an instance of the PHoverProvider
-const hoverProvider = new PHoverProvider();
+// Implement the server side of the language server
+export class PServer {
 
-// Create an instance of the PKeywordCompletionProvider
-const completionProvider = new PKeywordCompletionProvider();
+	// The connection to the client
+	private connection = createConnection(ProposedFeatures.all);
 
-// Register the PErrorCheckingProvider as a diagnostic provider for the 'p' language
-vscode.languages.registerDiagnosticCollection('p', errorCheckingProvider);
+	// The documents managed by the server
+	private documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
-// Register the PHoverProvider as a hover provider for the 'p' language
-vscode.languages.registerHoverProvider('p', hoverProvider);
+	// The settings for the server
+	private settings: any = {};
 
-// Register the PKeywordCompletionProvider as a completion provider for the 'p' language, using the '.' character as a trigger
-vscode.languages.registerCompletionItemProvider('p', completionProvider, ['.']);
+	// The diagnostics for the server
+	private diagnostics: Diagnostic[] = [];
+
+	// The hover provider for the server
+	private hoverProvider: PHoverProvider = new PHoverProvider();
+
+	// The error checking provider for the server
+	private errorCheckingProvider: PErrorCheckingProvider = new PErrorCheckingProvider();
+
+	// The keyword completion provider for the server
+	private autoCompletionProvider: AutocompletionProvider = new AutocompletionProvider();
+
+	// Initialize the server
+	constructor() {
+		// Initialize the connection
+		this.connection.onInitialize((params: InitializeParams) => {
+			return this.onInitialize(params);
+		});
+
+		// Listen for changes to the settings
+		this.connection.onDidChangeConfiguration((change) => {
+			this.onDidChangeConfiguration(change);
+		});
+
+		// Listen for changes to the documents
+		this.documents.onDidChangeContent((change) => {
+			this.onDidChangeContent(change);
+		});
+
+		// Listen for hover requests
+		this.connection.onHover((textDocumentPosition: TextDocumentPositionParams) => {
+			return this.onHover(textDocumentPosition);
+		});
+
+		// Listen for completion requests
+		this.connection.onCompletion((textDocumentPosition: TextDocumentPositionParams) => {
+			return this.onCompletion(textDocumentPosition);
+		});
+
+		// Listen for completion resolve requests
+		this.connection.onCompletionResolve((completionItem: CompletionItem) => {
+			return this.onCompletionResolve(completionItem);
+		});
+	}
+
+	// Start the server
+	public start() {
+		this.documents.listen(this.connection);
+		this.connection.listen();
+	}
+
+	// Handle the initialize request
+	private onInitialize(params: InitializeParams): InitializeResult {
+		return {
+			capabilities: {
+				textDocumentSync: TextDocumentSyncKind.Incremental,
+				hoverProvider: true,
+				completionProvider: {
+					resolveProvider: true
+				}
+			}
+		};
+	}
+
+	// Handle the change configuration request
+	private onDidChangeConfiguration(change: any) {
+		this.settings = change.settings;
+		this.connection.console.log('Settings changed');
+	}
+
+	// Handle the change content request
+	private onDidChangeContent(change: any) {
+		this.validate(change.document);
+	}
+
+	// Handle the hover request
+	private onHover(textDocumentPosition: TextDocumentPositionParams) {
+		return this.hoverProvider.provideHover(this.documents.get(textDocumentPosition.textDocument.uri), textDocumentPosition.position);
+	}
+
+	// Handle the completion request
+	private onCompletion(textDocumentPosition: TextDocumentPositionParams) {
+		return this.autoCompletionProvider.provideCompletionItems(this.documents.get(textDocumentPosition.textDocument.uri), textDocumentPosition.position);
+	}
+
+	// Handle the completion resolve request
+	private onCompletionResolve(completionItem: CompletionItem) {
+		return this.autoCompletionProvider.resolveCompletionItem(completionItem);
+	}
+
+	// Validate the document
+	private validate(document: TextDocument) {
+		// Get the diagnostics
+		this.diagnostics = this.errorCheckingProvider.provideDiagnostics(document);
+
+		// Send the diagnostics to the client
+		this.connection.sendDiagnostics({ uri: document.uri, diagnostics: this.diagnostics });
+	}
+}
+
+// Create the server
+const server = new PServer();
+
+// Start the server
+server.start();
+
+
+
+
+
+
+
+

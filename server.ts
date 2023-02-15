@@ -89,7 +89,7 @@ export function getSchema(): Promise<any> {
 	const fs = require('fs');
 	// eslint-disable-next-line @typescript-eslint/no-var-requires
 	const path = require('path');
-	const filePath = path.join(__dirname, '../../syntaxes/bobproc.tmLanguage.json');
+	const filePath = path.join(__dirname, '../../syntaxes/variables.json');
 	return new Promise((resolve, reject) => {
 		fs.readFile(filePath, 'utf8', (err: any, data: any) => {
 			if (err) {
@@ -223,39 +223,28 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 		diagnostics.push(diagnostic);
 	}
 }
-
-
-
-
 // This handler provides the list of the completion items return from the getSchema function and caches the schema file
 connection.onCompletion(
-	(_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
-		const items: CompletionItem[] = [];
-		if (schema) {
-			for (const key in schema) {
-				// eslint-disable-next-line no-prototype-builtins
-				if (schema.hasOwnProperty(key)) {
-					const element = schema[key];
-					const item: CompletionItem = {
-						label: key,
-						kind: CompletionItemKind.Text,
-						data: 1
-					};
-					items.push(item);
-				}
-			}
-		}
-		return items;
-	}
+    (_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
+        const variables = ["Paul", "Harry", "Helen", "Sylvia", "Kathleen", "Ruth", "Dorothy"];
+        return variables.map((variable) => {
+            return {
+                label: variable,
+                kind: CompletionItemKind.Variable,
+                data: 1
+            };
+        });
+    }
 );
+
 
 
 // This handler resolves additional information for the item selected in the completion list (hover)
 connection.onCompletionResolve(
 	(item: CompletionItem): CompletionItem => {
-		if (schema && item.data === 1) {
-			item.detail = schema[item.label].description;
-			item.documentation = schema[item.label].description;
+		if (item.data === 1) {
+			item.detail = 'Variable';
+			item.documentation = 'This is a variable';
 		}
 		return item;
 	}
@@ -273,7 +262,6 @@ connection.listen();
 							
 					
 	
-
 
 
 

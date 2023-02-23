@@ -1,36 +1,53 @@
 import * as path from 'path';
 import { workspace, ExtensionContext } from 'vscode';
-import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 
-export class MyLanguageServerProvider {
+class MyLanguageServer {
   private client: LanguageClient;
 
-  constructor(private readonly context: ExtensionContext) {
+  async start(context: ExtensionContext): Promise<{ dispose(): void }> {
+    // The server is implemented in node
     const serverModule = context.asAbsolutePath(path.join('server', 'server.js'));
+
+    // The debug options for the server
     const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+
+    // If the extension is launched in debug mode then the debug server options are used
     const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: TransportKind.ipc },
-      debug: { module: serverModule, transport: TransportKind.ipc, options: debugOptions },
+        run: { module: serverModule, transport: TransportKind.ipc },
+        debug: { module: serverModule, transport: TransportKind.ipc, options: debugOptions }
     };
+
+    // Options to control the language client
     const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ scheme: 'file', language: 'myLanguage' }],
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/.clientrc'),
-      },
+        // Register the server for documents
+        documentSelector: [{ scheme: 'file', language: 'myLanguage' }],
+        synchronize: {
+            // Notify the server about file changes to '.clientrc files contained in the workspace
+            fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
+        }
     };
+
+    // Create the language client
     this.client = new LanguageClient(
-      'myLanguageServer',
-      'My Language Server',
-      serverOptions,
-      clientOptions
+        'myLanguageServer',
+        'My Language Server',
+        serverOptions,
+        clientOptions
     );
-  }
 
-  public start() {
-    this.context.subscriptions.push(this.client.start());
-  }
+    // Start the language client
+    await this.client.start();
 
-  public dispose() {
-    this.client.stop();
+    // Return the disposable object with a dispose method
+    return {
+      dispose: () => this.client.stop(),
+    };
   }
+}
+
+export async function activate(context: ExtensionContext) {
+  const myLanguageServer = new MyLanguageServer();
+  const disposable = await myLanguageServer.start(context);
+  context.subscriptions.push(disposable);
 }

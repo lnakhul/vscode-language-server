@@ -1,50 +1,36 @@
-import { workspace, ExtensionContext, window, Disposable } from 'vscode';
-import {
-  BaseLanguageClient,
-  LanguageClientOptions,
-  RevealOutputChannelOn,
-} from 'vscode-languageclient';
-import { joinPath } from './paths';
+import * as path from 'path';
+import { workspace, ExtensionContext } from 'vscode';
+import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
-export type LanguageClientConstructor = (
-  name: string,
-  description: string,
-  clientOptions: LanguageClientOptions
-) => BaseLanguageClient;
+export class MyLanguageServerProvider {
+  private client: LanguageClient;
 
-export class LanguageServerProvider {
-  private client?: BaseLanguageClient;
-
-  constructor(
-    private readonly context: ExtensionContext,
-    private readonly languageClientConstructor: LanguageClientConstructor,
-  ) {}
-
-  public start(): Disposable {
-    const lsName = 'YAML Support';
-    const outputChannel = window.createOutputChannel(lsName);
-    // Options to control the language client
-    const clientOptions: LanguageClientOptions = {
-      // Register the server for on disk and newly created YAML documents
-      documentSelector: [{ language: 'yaml' }, { language: 'dockercompose' }, { pattern: '*.y(a)ml' }],
-      synchronize: {
-        // Notify the server about file changes to YAML and JSON files contained in the workspace
-        fileEvents: [workspace.createFileSystemWatcher('**/*.?(e)y?(a)ml'), workspace.createFileSystemWatcher('**/*.json')],
-      },
-      revealOutputChannelOn: RevealOutputChannelOn.Never,
+  constructor(private readonly context: ExtensionContext) {
+    const serverModule = context.asAbsolutePath(path.join('server', 'server.js'));
+    const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
+    const serverOptions: ServerOptions = {
+      run: { module: serverModule, transport: TransportKind.ipc },
+      debug: { module: serverModule, transport: TransportKind.ipc, options: debugOptions },
     };
-
-    // Create the language client and start it
-    this.client = this.languageClientConstructor('yaml', lsName, clientOptions);
-    const disposable = this.client.start();
-    this.context.subscriptions.push(disposable);
-
-    return disposable;
+    const clientOptions: LanguageClientOptions = {
+      documentSelector: [{ scheme: 'file', language: 'myLanguage' }],
+      synchronize: {
+        fileEvents: workspace.createFileSystemWatcher('**/.clientrc'),
+      },
+    };
+    this.client = new LanguageClient(
+      'myLanguageServer',
+      'My Language Server',
+      serverOptions,
+      clientOptions
+    );
   }
 
-  public stop(): Thenable<void> | undefined {
-    if (this.client) {
-      return this.client.stop();
-    }
+  public start() {
+    this.context.subscriptions.push(this.client.start());
+  }
+
+  public dispose() {
+    this.client.stop();
   }
 }

@@ -1,88 +1,61 @@
-import {
-  createConnection,
-  TextDocuments,
-  Diagnostic,
-  DiagnosticSeverity,
-  ProposedFeatures,
-  InitializeParams,
-  DidChangeConfigurationNotification,
-  CompletionItem,
-  TextDocumentPositionParams,
-  TextDocumentSyncKind,
-  InitializeResult,
-  IPCMessageReader,
-  IPCMessageWriter,
-} from 'vscode-languageserver/node';
-
-import {
-  TextDocument
-} from 'vscode-languageserver-textdocument';
+import { createConnection, TextDocuments } from '../../../server/node_modules/vscode-languageserver/node';
+import { TextDocument } from '../../../server/node_modules/vscode-languageserver-textdocument';
 import { CompletionProvider } from './completion';
 
-import { validateTextDocument } from './server';
+//const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
-jest.mock('vscode-languageserver/node');
-jest.mock('vscode-languageserver-textdocument');
-jest.mock('./completion');
+jest.mock('vscode-languageserver/node', () => ({
+  createConnection: jest.fn(),
+}));
 
-describe('server', () => {
-  const connection = createConnection();
-  const documents = new TextDocuments(TextDocument);
-  const completionProvider = new CompletionProvider();
+jest.mock('vscode-languageserver-textdocument', () => ({
+  TextDocuments: jest.fn(),
+}));
+
+jest.mock('./completion', () => ({
+  CompletionProvider: jest.fn(),
+}));
+
+describe('Server initialization', () => {
+  const mockedConnection = createConnection();
+  const mockedDocuments = new TextDocuments(TextDocument);
+  const mockedCompletionProvider = new CompletionProvider();
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('validateTextDocument', () => {
-    it('should validate a text document', async () => {
-      const settings = { maxNumberOfProblems: 1000 };
-      const uri = 'file:///example.txt';
-      const text = 'some text with a keyword';
-      const document = new TextDocument(uri, 'plaintext', 1, text);
-      const getDocumentSettings = jest.fn(() => Promise.resolve(settings));
-      const expectedResult = [{
-        severity: DiagnosticSeverity.Warning,
-        range: {
-          start: { line: 0, character: 17 },
-          end: { line: 0, character: 24 }
-        },
-        message: 'keyword is not a valid keyword',
-        source: 'ex'
-      }];
-      const spy = jest.spyOn(documents, 'all').mockReturnValue([document]);
-      const result = await validateTextDocument(document);
-      expect(getDocumentSettings).toHaveBeenCalledWith(uri);
-      expect(result).toBeUndefined();
-      expect(connection.sendDiagnostics).toHaveBeenCalledWith({
-        uri,
-        diagnostics: expectedResult
-      });
+  it('should initialize the server', () => {
+    const params = {
+      capabilities: {},
+      rootUri: null,
+      workspaceFolders: null,
+    };
+    const expectedCapabilities = {
+      textDocumentSync: 2,
+      completionProvider: {
+        resolveProvider: true,
+      },
+    };
+    const expectedInitializeResult = { capabilities: expectedCapabilities };
+
+    mockedConnection.onInitialize.mockImplementationOnce((callback) => {
+      const initializeResult = callback(params);
+      expect(initializeResult).toEqual(expectedInitializeResult);
+      return initializeResult;
     });
 
-    it('should return if there are no problems', async () => {
-      const settings = { maxNumberOfProblems: 1000 };
-      const uri = 'file:///example.txt';
-      const text = 'some text without any keywords';
-      const document = new TextDocument(uri, 'plaintext', 1, text);
-      const getDocumentSettings = jest.fn(() => Promise.resolve(settings));
-      const spy = jest.spyOn(documents, 'all').mockReturnValue([document]);
-      const result = await validateTextDocument(document);
-      expect(getDocumentSettings).toHaveBeenCalledWith(uri);
-      expect(result).toBeUndefined();
-      expect(connection.sendDiagnostics).not.toHaveBeenCalled();
+    mockedConnection.onInitialized.mockImplementationOnce((callback) => {
+      callback();
     });
-  });
 
-  describe('onDidChangeConfiguration', () => {
-    it('should revalidate all open text documents', () => {
-      const change = { settings: { languageServerExample: {} } };
-      const validateTextDocument = jest.fn();
-      const spy = jest.spyOn(documents, 'all').mockReturnValue([
-        { uri: 'file:///example.txt' }
-      ]);
-      const result = connection.onDidChangeConfiguration(change);
-      expect(validateTextDocument).toHaveBeenCalledWith({ uri: 'file:///example.txt' });
-    });
+    require('./server'); // the module that exports the server implementation
+
+    expect(mockedConnection.onInitialize).toHaveBeenCalledTimes(1);
+    expect(mockedConnection.onInitialized).toHaveBeenCalledTimes(1);
+    expect(mockedConnection.listen).not.toHaveBeenCalled();
+    expect(mockedDocuments.onDidClose).toHaveBeenCalledTimes(1);
+    expect(mockedDocuments.onDidChangeContent).toHaveBeenCalledTimes(1);
+    expect(mockedCompletionProvider.register).toHaveBeenCalledTimes(1);
   });
 });

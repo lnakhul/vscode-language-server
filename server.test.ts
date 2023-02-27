@@ -1,71 +1,32 @@
-import { createConnection } from 'vscode-languageserver/node';
-import { TextDocuments } from 'vscode-languageserver';
+import { expect } from 'chai';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { DiagnosticSeverity } from 'vscode-languageserver/node';
+import { createMockConnection } from 'vscode-languageserver/lib/test/mockConnection';
 import { CompletionProvider } from './completion';
 import { HoverProvider } from './hover';
 import { validateTextDocument } from './server';
 
-jest.mock('vscode-languageserver/node', () => ({
-  createConnection: jest.fn(() => ({
-    onInitialize: jest.fn(),
-    onInitialized: jest.fn(),
-    workspace: {
-      onDidChangeWorkspaceFolders: jest.fn(),
-    },
-    client: {
-      register: jest.fn(),
-    },
-  })),
-}));
-
-jest.mock('./completion', () => ({
-  CompletionProvider: jest.fn(() => ({
-    provideCompletionItems: jest.fn(),
-    resolveCompletionItem: jest.fn(),
-  })),
-}));
-
-jest.mock('./hover', () => ({
-  HoverProvider: jest.fn(() => ({
-    provideHover: jest.fn(),
-  })),
-}));
-
-describe('validateTextDocument', () => {
-  let mockConnection: any;
-  let mockCompletionProvider: any;
-  let mockHoverProvider: any;
-  let mockDocuments: TextDocuments;
-  let mockTextDocument: any;
-
-  beforeEach(() => {
-    mockConnection = createConnection();
-    mockCompletionProvider = new CompletionProvider();
-    mockHoverProvider = new HoverProvider();
-    mockDocuments = new TextDocuments();
-    mockTextDocument = {
-      getText: jest.fn(),
-      uri: 'file:///path/to/document.txt',
-      languageId: 'plaintext',
-      version: 1,
-      lineCount: 10,
-      offsetAt: jest.fn(),
-      positionAt: jest.fn(),
-    };
+describe('Server', () => {
+  it('should return no diagnostics for a valid text document', async () => {
+    const document = TextDocument.create('file://test.txt', 'plaintext', 1, 'Hello world');
+    const provider = new CompletionProvider();
+    const hoverProvider = new HoverProvider();
+    const connection = createMockConnection();
+    const result = await validateTextDocument(document, provider, hoverProvider, connection);
+    expect(result).to.have.lengthOf(0);
   });
 
-  it('should validate the text document and return diagnostics', async () => {
-    mockConnection.workspace.getConfiguration = jest.fn(() => Promise.resolve({ maxNumberOfProblems: 10 }));
-    mockConnection.workspace.getWorkspaceFolder = jest.fn(() => ({ uri: 'file:///path/to/workspace' }));
-    mockConnection.workspace.getWorkspaceFolders = jest.fn(() => [{ uri: 'file:///path/to/workspace' }]);
-    mockDocuments.get = jest.fn(() => mockTextDocument);
-    mockTextDocument.getText = jest.fn(() => 'Hello world');
-
-    const diagnostics = await validateTextDocument(mockTextDocument, mockConnection, mockDocuments, mockCompletionProvider, mockHoverProvider);
-
-    expect(diagnostics).toEqual([]);
-    expect(mockConnection.workspace.getConfiguration).toHaveBeenCalledWith({
-      scopeUri: mockTextDocument.uri,
-      section: 'languageServerExample',
-    });
+  it('should return diagnostics for an invalid text document', async () => {
+    const document = TextDocument.create('file://test.txt', 'plaintext', 1, 'Invalid keyword');
+    const provider = new CompletionProvider();
+    const hoverProvider = new HoverProvider();
+    const connection = createMockConnection();
+    const result = await validateTextDocument(document, provider, hoverProvider, connection);
+    expect(result).to.have.lengthOf(1);
+    expect(result[0].severity).to.equal(DiagnosticSeverity.Warning);
+    expect(result[0].range.start.line).to.equal(0);
+    expect(result[0].range.start.character).to.equal(0);
+    expect(result[0].range.end.line).to.equal(0);
+    expect(result[0].range.end.character).to.equal(7);
   });
 });

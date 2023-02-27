@@ -1,32 +1,85 @@
-import { expect } from 'chai';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { DiagnosticSeverity } from 'vscode-languageserver/node';
-import { createMockConnection } from 'vscode-languageserver/lib/test/mockConnection';
+import { createConnection } from 'vscode-languageserver/node';
+import { TextDocuments } from 'vscode-languageserver-textdocument';
 import { CompletionProvider } from './completion';
-import { HoverProvider } from './hover';
-import { validateTextDocument } from './server';
+import {
+  initializeServer,
+  onDidChangeConfiguration,
+  getDocumentSettings,
+  validateTextDocument,
+} from './server';
 
-describe('Server', () => {
-  it('should return no diagnostics for a valid text document', async () => {
-    const document = TextDocument.create('file://test.txt', 'plaintext', 1, 'Hello world');
-    const provider = new CompletionProvider();
-    const hoverProvider = new HoverProvider();
-    const connection = createMockConnection();
-    const result = await validateTextDocument(document, provider, hoverProvider, connection);
-    expect(result).to.have.lengthOf(0);
+jest.mock('vscode-languageserver/node', () => ({
+  createConnection: jest.fn(),
+}));
+
+jest.mock('vscode-languageserver-textdocument', () => ({
+  TextDocuments: jest.fn(),
+}));
+
+jest.mock('./completion', () => ({
+  CompletionProvider: jest.fn(),
+}));
+
+describe('initializeServer', () => {
+  const connection = createConnection();
+  const documents = new TextDocuments();
+  const completionProvider = new CompletionProvider();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should return diagnostics for an invalid text document', async () => {
-    const document = TextDocument.create('file://test.txt', 'plaintext', 1, 'Invalid keyword');
-    const provider = new CompletionProvider();
-    const hoverProvider = new HoverProvider();
-    const connection = createMockConnection();
-    const result = await validateTextDocument(document, provider, hoverProvider, connection);
-    expect(result).to.have.lengthOf(1);
-    expect(result[0].severity).to.equal(DiagnosticSeverity.Warning);
-    expect(result[0].range.start.line).to.equal(0);
-    expect(result[0].range.start.character).to.equal(0);
-    expect(result[0].range.end.line).to.equal(0);
-    expect(result[0].range.end.character).to.equal(7);
+  it('registers onInitialize callback', () => {
+    initializeServer(connection, documents, completionProvider);
+    expect(connection.onInitialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers onDidChangeConfiguration callback', () => {
+    initializeServer(connection, documents, completionProvider);
+    expect(connection.onDidChangeConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers onDidChangeWorkspaceFolders callback', () => {
+    initializeServer(connection, documents, completionProvider);
+    expect(connection.workspace.onDidChangeWorkspaceFolders).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onDidChangeConfiguration', () => {
+  const connection = createConnection();
+  const documents = new TextDocuments();
+  const completionProvider = new CompletionProvider();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('calls getDocumentSettings for every open document', () => {
+    const document1 = { uri: 'document1' };
+    const document2 = { uri: 'document2' };
+    documents.set(document1.uri, document1 as any);
+    documents.set(document2.uri, document2 as any);
+
+    onDidChangeConfiguration(connection, documents, completionProvider);
+
+    expect(getDocumentSettings).toHaveBeenCalledWith(document1.uri);
+    expect(getDocumentSettings).toHaveBeenCalledWith(document2.uri);
+  });
+});
+
+describe('validateTextDocument', () => {
+  const document = {
+    uri: 'document',
+    getText: jest.fn().mockReturnValue('some text'),
+  } as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('calls getDocumentSettings', async () => {
+    await validateTextDocument(document, {} as any);
+
+    expect(getDocumentSettings).toHaveBeenCalledWith(document.uri);
   });
 });

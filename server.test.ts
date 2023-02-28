@@ -1,79 +1,90 @@
-import { createConnection, TextDocuments } from 'vscode-languageserver/node';
+import { createConnection, ProposedFeatures } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { CompletionProvider } from './completion';
-import { IPCMessageReader, IPCMessageWriter } from 'vscode-jsonrpc';
+import { initializeServer } from './server';
 
-jest.mock('vscode-languageserver/node', () => ({
-  createConnection: jest.fn(() => ({
-    onInitialize: jest.fn(),
-    onInitialized: jest.fn(),
-    listen: jest.fn(),
-  })),
-}));
+jest.mock('vscode-languageserver/node', () => {
+  const createConnection = jest.fn();
+  const ProposedFeatures = jest.fn();
+  return { createConnection, ProposedFeatures };
+});
 
-jest.mock('./completion', () => ({
-  CompletionProvider: jest.fn(() => ({
-    register: jest.fn(),
-  })),
-}));
+jest.mock('vscode-languageserver-textdocument', () => {
+  const TextDocument = jest.fn();
+  return { TextDocument };
+});
 
-jest.mock('vscode-jsonrpc', () => ({
-  IPCMessageReader: jest.fn(),
-  IPCMessageWriter: jest.fn(),
-}));
+jest.mock('./completion', () => {
+  const CompletionProvider = jest.fn();
+  return { CompletionProvider };
+});
 
-describe('Server initialization', () => {
-  const mockedConnection = createConnection(new IPCMessageReader(process), new IPCMessageWriter(process));
-  const mockedDocuments = new TextDocuments();
-  const mockedCompletionProvider = new CompletionProvider();
+describe('initializeServer', () => {
+  let connection;
+  let documents;
+  let completionProvider;
+  let hasConfigurationCapability;
+  let hasWorkspaceFolderCapability;
+  let hasDiagnosticRelatedInformationCapability;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    connection = {
+      onInitialize: jest.fn(),
+      onInitialized: jest.fn(),
+      onDidChangeConfiguration: jest.fn(),
+      client: {
+        register: jest.fn(),
+      },
+      workspace: {
+        onDidChangeWorkspaceFolders: jest.fn(),
+        getConfiguration: jest.fn(),
+      },
+      console: {
+        log: jest.fn(),
+      },
+    };
+    createConnection.mockReturnValue(connection);
+    documents = {
+      onDidClose: jest.fn(),
+      onDidChangeContent: jest.fn(),
+      all: jest.fn(),
+    };
+    TextDocument.mockReturnValue(documents);
+    completionProvider = {
+      onCompletion: jest.fn(),
+      onCompletionResolve: jest.fn(),
+    };
+    CompletionProvider.mockReturnValue(completionProvider);
+    hasConfigurationCapability = false;
+    hasWorkspaceFolderCapability = false;
+    hasDiagnosticRelatedInformationCapability = false;
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
   });
 
   it('should initialize the server', () => {
     const params = {
-      capabilities: {},
-      rootUri: null,
-      workspaceFolders: null,
-    };
-    const expectedCapabilities = {
-      textDocumentSync: 2,
-      completionProvider: {
-        resolveProvider: true,
+      capabilities: {
+        workspace: {},
+        textDocument: {
+          publishDiagnostics: {},
+        },
       },
     };
-    const expectedInitializeResult = { capabilities: expectedCapabilities };
-
-    (mockedConnection.onInitialize as jest.Mock).mockImplementationOnce((handler) => {
-      const initializeResult = handler(params);
-      expect(initializeResult).toEqual(expectedInitializeResult);
-      return initializeResult;
-    });
-
-    (mockedConnection.onInitialized as jest.Mock).mockImplementationOnce((handler) => {
-      handler();
-    });
-
-    mockedDocuments.listen(mockedConnection);
-
-    mockedDocuments.onDidClose(e => {
-      mockedCompletionProvider.onDocumentClosed(e.document);
-    });
-
-    mockedDocuments.onDidChangeContent(e => {
-      mockedCompletionProvider.onDocumentChanged(e.document);
-    });
-
-    (mockedCompletionProvider.register as jest.Mock).mockImplementationOnce(() => {
-      expect(mockedDocuments.onDidClose).toHaveBeenCalledTimes(1);
-      expect(mockedDocuments.onDidChangeContent).toHaveBeenCalledTimes(1);
-    });
-
-    require('./server'); // the module that exports the server implementation
-
-    expect(mockedConnection.onInitialize).toHaveBeenCalledTimes(1);
-    expect(mockedConnection.onInitialized).toHaveBeenCalledTimes(1);
-    expect(mockedConnection.listen).toHaveBeenCalled();
-    expect(mockedCompletionProvider.register).toHaveBeenCalledTimes(1);
+    initializeServer();
+    expect(createConnection).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      ProposedFeatures,
+    );
+    expect(connection.onInitialize).toHaveBeenCalled();
+    expect(connection.onInitialized).toHaveBeenCalled();
+    expect(connection.onDidChangeConfiguration).toHaveBeenCalled();
+    expect(connection.client.register).toHaveBeenCalled();
+    expect(connection.workspace.onDidChangeWorkspaceFolders).toHaveBeenCalled();
+    expect(TextDocument).toHaveBeenCalledWith(TextDocument);
+    expect(CompletionProvider).toHaveBeenCalledWith();
   });
 });

@@ -1,24 +1,29 @@
-import { createConnection, TextDocuments } from '../../../server/node_modules/vscode-languageserver/node';
-import { TextDocument } from '../../../server/node_modules/vscode-languageserver-textdocument';
+import { createConnection, TextDocuments } from 'vscode-languageserver/node';
 import { CompletionProvider } from './completion';
-
-//const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
+import { IPCMessageReader, IPCMessageWriter } from 'vscode-jsonrpc';
 
 jest.mock('vscode-languageserver/node', () => ({
-  createConnection: jest.fn(),
-}));
-
-jest.mock('vscode-languageserver-textdocument', () => ({
-  TextDocuments: jest.fn(),
+  createConnection: jest.fn(() => ({
+    onInitialize: jest.fn(),
+    onInitialized: jest.fn(),
+    listen: jest.fn(),
+  })),
 }));
 
 jest.mock('./completion', () => ({
-  CompletionProvider: jest.fn(),
+  CompletionProvider: jest.fn(() => ({
+    register: jest.fn(),
+  })),
+}));
+
+jest.mock('vscode-jsonrpc', () => ({
+  IPCMessageReader: jest.fn(),
+  IPCMessageWriter: jest.fn(),
 }));
 
 describe('Server initialization', () => {
-  const mockedConnection = createConnection();
-  const mockedDocuments = new TextDocuments(TextDocument);
+  const mockedConnection = createConnection(new IPCMessageReader(process), new IPCMessageWriter(process));
+  const mockedDocuments = new TextDocuments();
   const mockedCompletionProvider = new CompletionProvider();
 
   beforeEach(() => {
@@ -39,23 +44,36 @@ describe('Server initialization', () => {
     };
     const expectedInitializeResult = { capabilities: expectedCapabilities };
 
-    mockedConnection.onInitialize.mockImplementationOnce((callback) => {
-      const initializeResult = callback(params);
+    (mockedConnection.onInitialize as jest.Mock).mockImplementationOnce((handler) => {
+      const initializeResult = handler(params);
       expect(initializeResult).toEqual(expectedInitializeResult);
       return initializeResult;
     });
 
-    mockedConnection.onInitialized.mockImplementationOnce((callback) => {
-      callback();
+    (mockedConnection.onInitialized as jest.Mock).mockImplementationOnce((handler) => {
+      handler();
+    });
+
+    mockedDocuments.listen(mockedConnection);
+
+    mockedDocuments.onDidClose(e => {
+      mockedCompletionProvider.onDocumentClosed(e.document);
+    });
+
+    mockedDocuments.onDidChangeContent(e => {
+      mockedCompletionProvider.onDocumentChanged(e.document);
+    });
+
+    (mockedCompletionProvider.register as jest.Mock).mockImplementationOnce(() => {
+      expect(mockedDocuments.onDidClose).toHaveBeenCalledTimes(1);
+      expect(mockedDocuments.onDidChangeContent).toHaveBeenCalledTimes(1);
     });
 
     require('./server'); // the module that exports the server implementation
 
     expect(mockedConnection.onInitialize).toHaveBeenCalledTimes(1);
     expect(mockedConnection.onInitialized).toHaveBeenCalledTimes(1);
-    expect(mockedConnection.listen).not.toHaveBeenCalled();
-    expect(mockedDocuments.onDidClose).toHaveBeenCalledTimes(1);
-    expect(mockedDocuments.onDidChangeContent).toHaveBeenCalledTimes(1);
+    expect(mockedConnection.listen).toHaveBeenCalled();
     expect(mockedCompletionProvider.register).toHaveBeenCalledTimes(1);
   });
 });

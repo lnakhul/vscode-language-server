@@ -1,48 +1,63 @@
 import { createConnection } from 'vscode-languageserver/node';
+import { TextDocuments } from 'vscode-languageserver-textdocument';
 import { CompletionProvider } from './completion';
-import { TextDocuments } from 'vscode-languageserver';
-import { validateTextDocument } from './server';
 
 jest.mock('vscode-languageserver/node', () => ({
   createConnection: jest.fn(),
 }));
 
+jest.mock('vscode-languageserver-textdocument', () => ({
+  TextDocuments: jest.fn(),
+}));
+
 jest.mock('./completion', () => ({
-  CompletionProvider: jest.fn().mockImplementation(() => ({
-    provideCompletionItems: jest.fn(),
-  })),
+  CompletionProvider: jest.fn(),
 }));
 
-jest.mock('vscode-languageserver', () => ({
-  TextDocuments: jest.fn().mockImplementation(() => ({
-    onDidChangeContent: jest.fn(),
-    onDidClose: jest.fn(),
-    all: jest.fn().mockReturnValue([]),
-  })),
-}));
-
-describe('server', () => {
-  let completionProvider: CompletionProvider;
-  let documents: TextDocuments;
-  let connection: any;
-
+describe('Server connection', () => {
   beforeEach(() => {
-    connection = createConnection();
-    completionProvider = new CompletionProvider();
-    documents = new TextDocuments();
+    jest.clearAllMocks();
   });
 
-  it('should validate the text document', async () => {
-    const textDocument = {
-      getText: () => 'some text with a keyword',
-      uri: 'some-uri',
-      positionAt: jest.fn().mockReturnValue({ line: 0, character: 0 }),
+  it('should create a connection for the server', () => {
+    const createConnectionMock = createConnection as jest.Mock;
+    const connectionMock = {
+      onInitialize: jest.fn(),
+      onInitialized: jest.fn(),
+      onDidChangeConfiguration: jest.fn(),
+      workspace: {
+        onDidChangeWorkspaceFolders: jest.fn(),
+      },
     };
+    createConnectionMock.mockReturnValueOnce(connectionMock);
 
-    const validateSpy = jest.spyOn(server, 'validateTextDocument');
+    const documentsMock = {
+      onDidClose: jest.fn(),
+      onDidChangeContent: jest.fn(),
+      all: jest.fn(),
+    };
+    const textDocumentMock = {};
+    documentsMock.all.mockReturnValueOnce([textDocumentMock]);
+    const TextDocumentsMock = TextDocuments as jest.Mock;
+    TextDocumentsMock.mockReturnValueOnce(documentsMock);
 
-    await validateTextDocument(textDocument as any);
+    const CompletionProviderMock = CompletionProvider as jest.Mock;
+    CompletionProviderMock.mockImplementationOnce(() => ({
+      provideCompletionItems: jest.fn(),
+    }));
 
-    expect(validateSpy).toHaveBeenCalledWith(textDocument as any);
+    const argv = [];
+    createConnection();
+
+    expect(createConnectionMock).toHaveBeenCalledWith(process.stdin, process.stdout);
+    expect(TextDocumentsMock).toHaveBeenCalledWith(textDocumentMock);
+    expect(CompletionProviderMock).toHaveBeenCalled();
+    expect(connectionMock.onInitialize).toHaveBeenCalled();
+    expect(connectionMock.onInitialized).toHaveBeenCalled();
+    expect(connectionMock.onDidChangeConfiguration).toHaveBeenCalled();
+    expect(connectionMock.workspace.onDidChangeWorkspaceFolders).toHaveBeenCalled();
+    expect(documentsMock.onDidClose).toHaveBeenCalled();
+    expect(documentsMock.onDidChangeContent).toHaveBeenCalled();
+    expect(documentsMock.all).toHaveBeenCalled();
   });
 });

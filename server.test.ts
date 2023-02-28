@@ -1,63 +1,87 @@
-import { createConnection } from 'vscode-languageserver/node';
-import { TextDocuments } from 'vscode-languageserver-textdocument';
+import {
+  createConnection,
+  TextDocuments,
+  Diagnostic,
+  DiagnosticSeverity,
+  InitializeParams,
+  DidChangeConfigurationNotification,
+  CompletionItem,
+  TextDocumentPositionParams,
+  TextDocumentSyncKind,
+  InitializeResult,
+  IPCMessageReader,
+  IPCMessageWriter,
+} from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { CompletionProvider } from './completion';
 
-jest.mock('vscode-languageserver/node', () => ({
-  createConnection: jest.fn(),
-}));
+// Import the module you want to test
+import { getDocumentSettings } from './server';
 
-jest.mock('vscode-languageserver-textdocument', () => ({
-  TextDocuments: jest.fn(),
-}));
+// Mock the dependencies of the module being tested
+jest.mock('vscode-languageserver/node', () => {
+  const { EventEmitter } = require('events');
+  const connection = new EventEmitter();
+  connection.onInitialize = jest.fn();
+  connection.onInitialized = jest.fn();
+  connection.onDidChangeConfiguration = jest.fn();
+  return {
+    createConnection: jest.fn(() => connection),
+    TextDocuments: jest.fn(),
+    Diagnostic: jest.fn(),
+    DiagnosticSeverity: jest.fn(),
+    InitializeParams: jest.fn(),
+    DidChangeConfigurationNotification: jest.fn(),
+    CompletionItem: jest.fn(),
+    TextDocumentPositionParams: jest.fn(),
+    TextDocumentSyncKind: jest.fn(),
+    InitializeResult: jest.fn(),
+    IPCMessageReader: jest.fn(),
+    IPCMessageWriter: jest.fn(),
+  };
+});
 
-jest.mock('./completion', () => ({
-  CompletionProvider: jest.fn(),
-}));
+jest.mock('./completion', () => {
+  return {
+    CompletionProvider: jest.fn(),
+  };
+});
 
-describe('Server connection', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+// Write a test suite for the module
+describe('getDocumentSettings', () => {
+  it('should return global settings when no configuration capability is available', async () => {
+    // Create a mock connection object
+    const connection = createConnection();
+    const documentUri = 'file:///path/to/document';
+
+    // Mock the connection.workspace.getConfiguration() method
+    connection.workspace.getConfiguration = jest.fn().mockResolvedValueOnce({
+      maxNumberOfProblems: 1000,
+    });
+
+    // Call the function being tested
+    const result = await getDocumentSettings(documentUri, connection);
+
+    // Verify that the function returns the correct value
+    expect(result).toEqual({ maxNumberOfProblems: 1000 });
   });
 
-  it('should create a connection for the server', () => {
-    const createConnectionMock = createConnection as jest.Mock;
-    const connectionMock = {
-      onInitialize: jest.fn(),
-      onInitialized: jest.fn(),
-      onDidChangeConfiguration: jest.fn(),
-      workspace: {
-        onDidChangeWorkspaceFolders: jest.fn(),
+  it('should return document settings when configuration capability is available', async () => {
+    // Create a mock connection object
+    const connection = createConnection();
+    const documentUri = 'file:///path/to/document';
+
+    // Mock the connection.workspace.getConfiguration() method
+    connection.workspace.getConfiguration = jest.fn().mockResolvedValueOnce({
+      languageServerExample: {
+        maxNumberOfProblems: 2000,
       },
-    };
-    createConnectionMock.mockReturnValueOnce(connectionMock);
+    });
 
-    const documentsMock = {
-      onDidClose: jest.fn(),
-      onDidChangeContent: jest.fn(),
-      all: jest.fn(),
-    };
-    const textDocumentMock = {};
-    documentsMock.all.mockReturnValueOnce([textDocumentMock]);
-    const TextDocumentsMock = TextDocuments as jest.Mock;
-    TextDocumentsMock.mockReturnValueOnce(documentsMock);
+    // Call the function being tested
+    const result = await getDocumentSettings(documentUri, connection);
 
-    const CompletionProviderMock = CompletionProvider as jest.Mock;
-    CompletionProviderMock.mockImplementationOnce(() => ({
-      provideCompletionItems: jest.fn(),
-    }));
-
-    const argv = [];
-    createConnection();
-
-    expect(createConnectionMock).toHaveBeenCalledWith(process.stdin, process.stdout);
-    expect(TextDocumentsMock).toHaveBeenCalledWith(textDocumentMock);
-    expect(CompletionProviderMock).toHaveBeenCalled();
-    expect(connectionMock.onInitialize).toHaveBeenCalled();
-    expect(connectionMock.onInitialized).toHaveBeenCalled();
-    expect(connectionMock.onDidChangeConfiguration).toHaveBeenCalled();
-    expect(connectionMock.workspace.onDidChangeWorkspaceFolders).toHaveBeenCalled();
-    expect(documentsMock.onDidClose).toHaveBeenCalled();
-    expect(documentsMock.onDidChangeContent).toHaveBeenCalled();
-    expect(documentsMock.all).toHaveBeenCalled();
+    // Verify that the function returns the correct value
+    expect(result).toEqual({ maxNumberOfProblems: 2000 });
   });
 });

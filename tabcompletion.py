@@ -46,3 +46,25 @@ class QuartzCompleter(Completer):
     
     def _complete_default(self, event):
         raise TryNext()
+
+        
+        class QuartzCompleter(Completer): 
+    def __init__(self, *a, **kw): 
+        super().__init__(*a, **kw) 
+        self.srcdb = sandra.sandra.Sandra() 
+        self.srcdb.connect() 
+        self.srcdb.load() 
+        self.srcdb.load_modules() 
+        self.srcdb.load_functions() 
+        self.srcdb.load_classes() 
+        self.srcdb.load_methods() 
+        self.srcdb.load_properties() 
+        self.srcdb.load_variables() 
+        self.srcdb.load_constants() 
+        self.srcdb.load_enums()
+        
+    def complete(self, event): 
+        if event.symbol == '': 
+            return self.srcdb.get_all_names() 
+        else: 
+            return self.srcdb.get_names(event.symbol)

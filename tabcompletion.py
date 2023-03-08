@@ -48,23 +48,54 @@ class QuartzCompleter(Completer):
         raise TryNext()
 
         
-        class QuartzCompleter(Completer): 
-    def __init__(self, *a, **kw): 
-        super().__init__(*a, **kw) 
-        self.srcdb = sandra.sandra.Sandra() 
-        self.srcdb.connect() 
-        self.srcdb.load() 
-        self.srcdb.load_modules() 
-        self.srcdb.load_functions() 
-        self.srcdb.load_classes() 
-        self.srcdb.load_methods() 
-        self.srcdb.load_properties() 
-        self.srcdb.load_variables() 
-        self.srcdb.load_constants() 
-        self.srcdb.load_enums()
-        
-    def complete(self, event): 
-        if event.symbol == '': 
-            return self.srcdb.get_all_names() 
-        else: 
-            return self.srcdb.get_names(event.symbol)
+.............................................................
+
+
+
+
+class QuartzCompleter(Completer):
+    def __init__(self, srcdb):
+        self.srcdb = srcdb
+
+    def _complete_path(self, path):
+        # Implement completion for paths in sandra database
+        path_items = path.split('.')
+        item_name = path_items[-1]
+        path_prefix = '.'.join(path_items[:-1]) + '.' if len(path_items) > 1 else ''
+        objects = self.srcdb.get_objects_by_prefix(path_prefix)
+        completions = [path_prefix + obj_name for obj_name in objects if obj_name.startswith(item_name)]
+        return completions
+
+    def _complete_attr(self, obj, attr):
+        # Implement completion for object attributes in sandra database
+        attrs = dir(obj)
+        completions = [a for a in attrs if a.startswith(attr)]
+        return completions
+
+    def _complete_object(self, obj):
+        # Implement completion for object methods and properties in sandra database
+        methods = inspect.getmembers(obj, inspect.ismethod)
+        properties = inspect.getmembers(obj.__class__, lambda o: isinstance(o, property))
+        completions = [m[0] for m in methods] + [p[0] for p in properties]
+        return completions
+
+    def _get_completions(self, line):
+        try:
+            path, attr = line.rsplit('.', 1)
+            obj = self.srcdb.get_object_by_path(path)
+            if obj is not None:
+                completions = self._complete_attr(obj, attr)
+                if completions:
+                    return completions
+                completions = self._complete_object(obj)
+                return completions
+        except ValueError:
+            pass
+        completions = self._complete_path(line)
+        return completions
+
+    def complete(self, text, line, cursor_pos, context):
+        line = line[:cursor_pos]
+        completions = self._get_completions(line)
+        return completions
+

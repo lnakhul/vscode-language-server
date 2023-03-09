@@ -98,4 +98,46 @@ class QuartzCompleter(Completer):
         line = line[:cursor_pos]
         completions = self._get_completions(line)
         return completions
+    
+    
+    -----------------------------------------------------------
+    
+    def _complete_class(self, path):
+        # Implement completion for class definitions in sandra database
+        path_items = path.split('.')
+        item_name = path_items[-1]
+        path_prefix = '.'.join(path_items[:-1]) + '.' if len(path_items) > 1 else ''
+        objects = self.srcdb.get_objects_by_prefix(path_prefix)
+        completions = [path_prefix + obj_name for obj_name in objects if obj_name.startswith(item_name) and inspect.isclass(self.srcdb.get_object_by_path(path_prefix + obj_name))]
+        return completions
+
+    def _complete_function(self, path):
+        # Implement completion for function definitions in sandra database
+        path_items = path.split('.')
+        item_name = path_items[-1]
+        path_prefix = '.'.join(path_items[:-1]) + '.' if len(path_items) > 1 else ''
+        objects = self.srcdb.get_objects_by_prefix(path_prefix)
+        completions = [path_prefix + obj_name for obj_name in objects if obj_name.startswith(item_name) and inspect.isfunction(self.srcdb.get_object_by_path(path_prefix + obj_name))]
+        return completions
+
+    def _get_completions(self, line):
+        try:
+            path, attr = line.rsplit('.', 1)
+            obj = self.srcdb.get_object_by_path(path)
+            if obj is not None:
+                completions = self._complete_attr(obj, attr)
+                if completions:
+                    return completions
+                completions = self._complete_class(path)
+                if completions:
+                    return completions
+                completions = self._complete_function(path)
+                if completions:
+                    return completions
+                completions = self._complete_object(obj)
+                return completions
+        except ValueError:
+            pass
+        completions = self._complete_path(line)
+        return completions
 

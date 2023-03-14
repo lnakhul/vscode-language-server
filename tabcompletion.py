@@ -143,41 +143,33 @@ class QuartzCompleter(Completer):
     
     
     --------------------------------------------------
-    
-    from IPython.core.completer import Completer
-from importlib import import_module
+from IPython.core.completer import Completer
+import importlib.util
 import os
 
-class ModulePathCompleter(Completer):
-    def __init__(self):
-        super().__init__()
-    
-    def complete(self, text, line, cursor_pos):
-        # Find the last word in the line up to the cursor position
-        prefix = line[:cursor_pos].split()[-1]
-        # Split the prefix into module path components
-        parts = prefix.split('.')
-        # Find the module path prefix and the module name suffix
-        module_prefix = '.'.join(parts[:-1])
-        module_suffix = parts[-1]
-        # Import the module path prefix
-        try:
-            module = import_module(module_prefix)
-        except:
-            return [], 0
-        # Get the module path prefix directory
-        module_dir = os.path.dirname(module.__file__)
-        # Find the completions that match the module path suffix
+class QuartzCompleter(Completer):
+    def global_matches(self, text):
+        """
+        Add completion for module paths starting with `quartz.`. 
+        
+        Example usage: `import quartz.<TAB>`.
+        """
         completions = []
-        for name in os.listdir(module_dir):
-            path = os.path.join(module_dir, name)
-            if os.path.isdir(path):
-                if name.startswith(module_suffix):
-                    completions.append(module_prefix + '.' + name)
-            elif name.endswith('.py'):
-                if name[:-3].startswith(module_suffix):
-                    completions.append(module_prefix + '.' + name[:-3])
-        # Return the completions and the start index of the completions
-        return completions, len(prefix) - len(module_suffix)
-
-
+        _, _, path = text.partition('quartz.')
+        if not path:
+            return completions
+        module_path = path.split('.')
+        module_prefix = '.'.join(module_path[:-1])
+        module_name = module_path[-1]
+        try:
+            if module_prefix:
+                module = importlib.import_module(f"quartz.{module_prefix}", package=None)
+            else:
+                module = importlib.import_module("quartz", package=None)
+            module_path = os.path.dirname(module.__file__)
+            for file_name in os.listdir(module_path):
+                if file_name.startswith(module_name) and file_name.endswith('.py'):
+                    completions.append(module_name + '.' + file_name[:-3])
+        except (ImportError, AttributeError):
+            pass
+        return completions

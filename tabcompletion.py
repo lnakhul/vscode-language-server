@@ -173,3 +173,51 @@ class QuartzCompleter(Completer):
         except (ImportError, AttributeError):
             pass
         return completions
+    
+    --------------------------------
+    import os
+import sys
+from IPython.core.completer import Completer
+from importlib import import_module
+
+
+class ModulePathCompleter(Completer):
+    def __init__(self):
+        super().__init__()
+
+    def complete(self, text, state):
+        if state == 0:
+            # Split the text into module name and attribute name (if any)
+            parts = text.split('.')
+            if len(parts) > 1:
+                mod_name, attr_name = '.'.join(parts[:-1]), parts[-1]
+            else:
+                mod_name, attr_name = parts[0], ''
+
+            # Find the module object
+            try:
+                mod = import_module(mod_name)
+            except ModuleNotFoundError:
+                return None
+
+            # Get the list of module attributes
+            attrs = dir(mod)
+
+            # Filter the attributes based on the user input
+            matches = [a for a in attrs if a.startswith(attr_name)]
+
+            # Save the matches for future completion
+            self.matches = matches
+
+        # Return the next match
+        try:
+            return self.matches[state]
+        except IndexError:
+            return None
+
+
+# Register the completer with IPython
+ip = get_ipython()
+completer = ModulePathCompleter()
+ip.set_hook('complete_command', completer.complete)
+

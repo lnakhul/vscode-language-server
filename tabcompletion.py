@@ -140,4 +140,44 @@ class QuartzCompleter(Completer):
             pass
         completions = self._complete_path(line)
         return completions
+    
+    
+    --------------------------------------------------
+    
+    from IPython.core.completer import Completer
+from importlib import import_module
+import os
+
+class ModulePathCompleter(Completer):
+    def __init__(self):
+        super().__init__()
+    
+    def complete(self, text, line, cursor_pos):
+        # Find the last word in the line up to the cursor position
+        prefix = line[:cursor_pos].split()[-1]
+        # Split the prefix into module path components
+        parts = prefix.split('.')
+        # Find the module path prefix and the module name suffix
+        module_prefix = '.'.join(parts[:-1])
+        module_suffix = parts[-1]
+        # Import the module path prefix
+        try:
+            module = import_module(module_prefix)
+        except:
+            return [], 0
+        # Get the module path prefix directory
+        module_dir = os.path.dirname(module.__file__)
+        # Find the completions that match the module path suffix
+        completions = []
+        for name in os.listdir(module_dir):
+            path = os.path.join(module_dir, name)
+            if os.path.isdir(path):
+                if name.startswith(module_suffix):
+                    completions.append(module_prefix + '.' + name)
+            elif name.endswith('.py'):
+                if name[:-3].startswith(module_suffix):
+                    completions.append(module_prefix + '.' + name[:-3])
+        # Return the completions and the start index of the completions
+        return completions, len(prefix) - len(module_suffix)
+
 

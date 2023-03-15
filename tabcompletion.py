@@ -221,3 +221,56 @@ ip = get_ipython()
 completer = ModulePathCompleter()
 ip.set_hook('complete_command', completer.complete)
 
+-----------------------------
+class QzwinCompatibleShell(QtWidgets.QWidget):
+    # ...
+
+    def pathCompletions(self, text):
+        """
+        Returns a list of possible completions for a given path.
+        """
+        dirname, rest = os.path.split(text)
+        completions = []
+        for filename in os.listdir(dirname or '.'):
+            if filename.startswith(rest):
+                path = os.path.join(dirname, filename)
+                if os.path.isdir(path):
+                    path += '/'
+                completions.append(path)
+        return completions
+
+    def qzcompleter(self, event):
+        """
+        Provides tab completion for file and module paths.
+        """
+        text = event.currentText()
+        cursor_pos = event.cursorPosition()
+
+        # Determine the text to be completed and the text before the cursor
+        start_pos = text[:cursor_pos].rfind(' ') + 1
+        text_to_complete = text[start_pos:cursor_pos]
+        text_before_cursor = text[:cursor_pos]
+
+        # Determine if the text to be completed is a file path or a module path
+        if '/' in text_to_complete:
+            dirname, rest = os.path.split(text_to_complete)
+            completions = self.pathCompletions(text_to_complete)
+        else:
+            completions = dir(__builtins__)
+            completions.extend([modname for modname in sys.modules.keys() if '.' not in modname])
+            completions = sorted(set(completions))
+            completions = [c for c in completions if c.startswith(text_to_complete)]
+
+        if len(completions) == 1:
+            # Only one completion available, so replace the text to be completed with it
+            event.setCurrentText(text_before_cursor[:start_pos] + completions[0] + text_before_cursor[cursor_pos:])
+            event.setCursorPosition(start_pos + len(completions[0]))
+        elif completions:
+            # Multiple completions available, so display them in a list
+            self.completer = QtWidgets.QCompleter(completions)
+            self.completer.setWidget(self.shell)
+            self.completer.popup().setCurrentIndex(self.completer.completionModel().index(0, 0))
+            self.completer.popup().show()
+        else:
+            # No completions available, so hide the completer
+            self.completer.popup().hide()

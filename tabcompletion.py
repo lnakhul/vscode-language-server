@@ -222,55 +222,37 @@ completer = ModulePathCompleter()
 ip.set_hook('complete_command', completer.complete)
 
 -----------------------------
-class QzwinCompatibleShell(QtWidgets.QWidget):
-    # ...
 
-    def pathCompletions(self, text):
-        """
-        Returns a list of possible completions for a given path.
-        """
-        dirname, rest = os.path.split(text)
-        completions = []
-        for filename in os.listdir(dirname or '.'):
-            if filename.startswith(rest):
-                path = os.path.join(dirname, filename)
+    def pathCompletion(self, event):
+        """Return a list of file paths for the given event."""
+        tokens = event.line.split()
+        if not tokens:
+            return []
+
+        last_token = tokens[-1]
+        if last_token.startswith('/'):
+            # absolute path completion
+            return [path for path in glob.glob(last_token + '*') if os.path.isdir(path) or path.endswith('.py')]
+
+        elif '/' in last_token:
+            # relative path completion
+            prefix, postfix = last_token.rsplit('/', 1)
+            if prefix == '':
+                prefix = '.'
+            matches = []
+            for path in glob.glob(prefix + '/*'):
                 if os.path.isdir(path):
-                    path += '/'
-                completions.append(path)
-        return completions
+                    matches.append(path + '/')
+                elif path.endswith('.py') and path.startswith(prefix):
+                    matches.append(path)
+            return matches
 
-    def qzcompleter(self, event):
-        """
-        Provides tab completion for file and module paths.
-        """
-        text = event.currentText()
-        cursor_pos = event.cursorPosition()
-
-        # Determine the text to be completed and the text before the cursor
-        start_pos = text[:cursor_pos].rfind(' ') + 1
-        text_to_complete = text[start_pos:cursor_pos]
-        text_before_cursor = text[:cursor_pos]
-
-        # Determine if the text to be completed is a file path or a module path
-        if '/' in text_to_complete:
-            dirname, rest = os.path.split(text_to_complete)
-            completions = self.pathCompletions(text_to_complete)
         else:
-            completions = dir(__builtins__)
-            completions.extend([modname for modname in sys.modules.keys() if '.' not in modname])
-            completions = sorted(set(completions))
-            completions = [c for c in completions if c.startswith(text_to_complete)]
+            # complete module paths from the sandra database
+            module_paths = self.modulePathCompletion(event)
+            file_paths = [path for path in glob.glob('*') if os.path.isfile(path) and path.endswith('.py')]
+            return module_paths + file_paths
 
-        if len(completions) == 1:
-            # Only one completion available, so replace the text to be completed with it
-            event.setCurrentText(text_before_cursor[:start_pos] + completions[0] + text_before_cursor[cursor_pos:])
-            event.setCursorPosition(start_pos + len(completions[0]))
-        elif completions:
-            # Multiple completions available, so display them in a list
-            self.completer = QtWidgets.QCompleter(completions)
-            self.completer.setWidget(self.shell)
-            self.completer.popup().setCurrentIndex(self.completer.completionModel().index(0, 0))
-            self.completer.popup().show()
-        else:
-            # No completions available, so hide the completer
-            self.completer.popup().hide()
+        
+            
+            

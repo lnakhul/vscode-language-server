@@ -254,5 +254,32 @@ ip.set_hook('complete_command', completer.complete)
             return module_paths + file_paths
 
         
-            
+ -----------------------------------------------------
+
+def path_completion(self, event):
+        _, info = self.parse_event(event)
+        if info['text'] == '':
+            return []
+        path_list = self.path_completion_sandra(info['line'])
+        return path_list
+
+    def path_completion_sandra(self, line):
+        match = re.search(r'qz\.\w+$', line)
+        if match:
+            prefix = match.group(0)
+            path_list = []
+            for path in self.srcdb.paths:
+                if path.startswith(prefix):
+                    path_list.append(path[len('qz.'):])
+            return path_list
+        return []
+
+    def complete(self, text, state):
+        if state == 0:
+            event = self.shell._autocomplete_state
+            self.matches = self.path_completion(event)
+        try:
+            return self.matches[state] + ' '
+        except IndexError:
+            return None
             

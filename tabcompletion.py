@@ -275,4 +275,24 @@ def get_completions(self, event):
             completions = []
         completions = [Completion(c) for c in completions if c.startswith(text)]
         return completions
-            
+        
+        -------------------------
+        def complete(self, event):
+        """Override the default `complete` method to provide tab completion for module paths."""
+        try:
+            super().complete(event)
+        except Exception:
+            pass
+        else:
+            return
+        
+        completions = self.path_completion(event)
+        self.matches = completions
+        self.matching_text = event.symbol
+        
+        if len(completions) == 1:
+            self.append(completions[0])
+        elif len(completions) > 1:
+            self.display_matches(completions)
+        else:
+            self.display_matches([])

@@ -277,22 +277,23 @@ def get_completions(self, event):
         return completions
         
         -------------------------
-        def complete(self, event):
-        """Override the default `complete` method to provide tab completion for module paths."""
-        try:
-            super().complete(event)
-        except Exception:
-            pass
-        else:
-            return
+       def module_completer(self, event):
+        """Tab completion for Quartz modules and files""" 
+        line = event.line
+        cursor_pos = event.line_cursor 
         
-        completions = self.path_completion(event)
-        self.matches = completions
-        self.matching_text = event.symbol
+        text_before_cursor = line[:cursor_pos].split()[-1]
+        if not text_before_cursor: 
+            return 
         
-        if len(completions) == 1:
-            self.append(completions[0])
-        elif len(completions) > 1:
-            self.display_matches(completions)
-        else:
-            self.display_matches([])
+        # Get module and file names from pathCompletions 
+        completions = self.path_completions(self.uri, root='/qz*') 
+        completions = [c.split("/")[-1] for c in completions if not c.endswith(".py")] 
+        
+        # Filter completions based on current file name being completed 
+        completions = [c for c in completions if c.startswith(text_before_cursor)] 
+        
+        # Add completions to event 
+        event.completions = completions
+        
+        return event

@@ -256,30 +256,23 @@ ip.set_hook('complete_command', completer.complete)
         
  -----------------------------------------------------
 
-def path_completion(self, event):
-        _, info = self.parse_event(event)
-        if info['text'] == '':
-            return []
-        path_list = self.path_completion_sandra(info['line'])
-        return path_list
-
-    def path_completion_sandra(self, line):
-        match = re.search(r'qz\.\w+$', line)
-        if match:
-            prefix = match.group(0)
-            path_list = []
-            for path in self.srcdb.paths:
-                if path.startswith(prefix):
-                    path_list.append(path[len('qz.'):])
-            return path_list
-        return []
-
-    def complete(self, text, state):
-        if state == 0:
-            event = self.shell._autocomplete_state
-            self.matches = self.path_completion(event)
-        try:
-            return self.matches[state] + ' '
-        except IndexError:
-            return None
+def get_completions(self, event):
+        text = event.line_buffer[:event.cursor_pos]
+        if text.startswith('import ') or text.startswith('from '):
+            completions = []
+            try:
+                module = importlib.import_module(text.split()[1])
+                module_path = module.__path__[0]
+                completions += self.srcdb.listdir(module_path)
+            except (ImportError, AttributeError):
+                pass
+        elif text.startswith('from '):
+            module_name = text.split()[1]
+            if '.' in module_name:
+                module_name = module_name.rsplit('.', 1)[0]
+            completions = self.path_completion(module_name)
+        else:
+            completions = []
+        completions = [Completion(c) for c in completions if c.startswith(text)]
+        return completions
             

@@ -328,3 +328,80 @@ class QzProfileMagics(Magics):
             print(f'Invalid subcommand "{subcommand}"')
 
 
+--------------------------------------------------------
+
+@line_magic
+    def qzprofile(self, parameter_s=''):
+        r"""%qzprofile => Manage Quartz profiles.
+
+        %qzprofile create <profilename>
+        Create a new Quartz profile.
+
+        %qzprofile list
+        List all Quartz profiles.
+
+        %qzprofile load <profilename>
+        Load the specified Quartz profile.
+
+        %qzprofile delete <profilename>
+        Delete the specified Quartz profile.
+        """
+
+        args = parameter_s.split()
+        if not args:
+            print(self.qzprofile.__doc__)
+            return
+
+        command = args[0]
+        if command == 'create':
+            if len(args) != 2:
+                print('Invalid arguments.')
+                return
+            profilename = args[1]
+            profile_dir = os.path.join(self.user_profile_dir, profilename)
+            if os.path.exists(profile_dir):
+                print('Profile already exists.')
+                return
+            os.makedirs(profile_dir, exist_ok=True)
+            print(f'Profile {profilename} created successfully.')
+        elif command == 'list':
+            profiles = os.listdir(self.user_profile_dir)
+            if not profiles:
+                print('No profiles found.')
+                return
+            print('Profiles:')
+            for profile in profiles:
+                print(f'- {profile}')
+        elif command == 'load':
+            if len(args) != 2:
+                print('Invalid arguments.')
+                return
+            profilename = args[1]
+            profile_dir = os.path.join(self.user_profile_dir, profilename)
+            if not os.path.exists(profile_dir):
+                print(f'Profile {profilename} does not exist.')
+                return
+            if self.current_profile:
+                self.qzreload('0')
+                sys.path.remove(os.path.join(self.user_profile_dir, self.current_profile))
+            self.current_profile = profilename
+            sys.path.insert(0, os.path.join(self.user_profile_dir, self.current_profile))
+            self._reloader.check_all = True
+            self._reloader.enabled = True
+            print(f'Profile {profilename} loaded successfully.')
+        elif command == 'delete':
+            if len(args) != 2:
+                print('Invalid arguments.')
+                return
+            profilename = args[1]
+            profile_dir = os.path.join(self.user_profile_dir, profilename)
+            if not os.path.exists(profile_dir):
+                print(f'Profile {profilename} does not exist.')
+                return
+            if self.current_profile == profilename:
+                self.qzreload('0')
+                self.current_profile = None
+            os.rmdir(profile_dir)
+            print(f'Profile {profilename} deleted successfully.')
+        else:
+            print('Invalid command.')

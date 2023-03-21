@@ -247,4 +247,84 @@ class QuartzReloadMagics(Magics):
         
         # print the path to the new profile directory
         print("Profile created: ", profile_dir)
+        
+        ------------------------------------------------
+        
+        import os
+from IPython.core.magic import line_magic, Magics, magics_class
+from typing import Optional
+
+def get_user_config_name(username: Optional [str]=None) -> str: 
+    import re 
+    raw_name_string = username or os.getenv('USER', 'default') 
+    quote_less_name_string = raw_name_string.replace('\'', '') 
+    user_config_name = re.sub("[!#$%&'*+-/=?^`{|}~.]", '_', quote_less_name_string).strip("'")
+    return user_config_name
+
+@magics_class
+class QzProfileMagics(Magics):
+    def __init__(self, shell, profile_dir):
+        super().__init__(shell)
+        self.profile_dir = profile_dir
+        self.current_profile = None
+    
+    @line_magic
+    def qzprofile(self, parameter_s=''):
+        """
+        %qzprofile subcommand
+        
+        subcommands:
+        create <profilename>: Create a new profile
+        switch <profilename>: Switch to the specified profile
+        load <module>: Load the specified module in the current profile
+        """
+        subcommands = parameter_s.strip().split()
+        if not subcommands:
+            print('Invalid subcommand')
+            return
+        
+        subcommand = subcommands[0]
+        args = subcommands[1:]
+        
+        if subcommand == 'create':
+            if len(args) != 1:
+                print('Usage: %qzprofile create <profilename>')
+                return
+            profile_name = args[0]
+            profile_path = os.path.join(self.profile_dir, profile_name)
+            if os.path.exists(profile_path):
+                print(f'Profile "{profile_name}" already exists')
+                return
+            os.makedirs(profile_path, exist_ok=True)
+            print(f'Profile "{profile_name}" created')
+        
+        elif subcommand == 'switch':
+            if len(args) != 1:
+                print('Usage: %qzprofile switch <profilename>')
+                return
+            profile_name = args[0]
+            profile_path = os.path.join(self.profile_dir, profile_name)
+            if not os.path.exists(profile_path):
+                print(f'Profile "{profile_name}" does not exist')
+                return
+            self.current_profile = profile_name
+            print(f'Switched to profile "{profile_name}"')
+        
+        elif subcommand == 'load':
+            if len(args) != 1:
+                print('Usage: %qzprofile load <module>')
+                return
+            module_name = args[0]
+            if not self.current_profile:
+                print('No profile selected. Please switch to a profile first')
+                return
+            try:
+                __import__(module_name)
+                print(f'Module "{module_name}" loaded in profile "{self.current_profile}"')
+            except ModuleNotFoundError:
+                print(f'Module "{module_name}" not found')
+        
+        else:
+            print(f'Invalid subcommand "{subcommand}"')
+
 

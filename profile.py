@@ -199,3 +199,52 @@ class QuartzReloadMagic(Magics):
         self.profile_manager.show_current_profile()
 
     @line
+    
+    ------------------------------------------------
+    
+   @magics_class
+class QuartzReloadMagics(Magics):
+    def __init__(self, srcdb: 'sandra.sandra.Sandra', *a, **kw):
+        super().__init__(*a, **kw)
+        self._reloader = QuartzReloader(srcdb)
+        self._reloader.check_all = False
+        self.loaded_modules = set(sys.modules)
+        self.shell.events.register('pre_run_cell', self.pre_run_cell)
+        self.shell.events.register('post_execute', self.post_execute_hook)
+        
+        # add the new magic command
+        self.shell.add_magic('qzprofile', self.qzprofile)
+        
+        # define the default user profile directory
+        self.user_profile_dir = os.path.expanduser("~/.quartz/profiles")
+        
+    @line_magic
+    def qzprofile(self, parameter_s=''):
+        """Create a new profile in the default user profile directory.
+        
+        Usage: %qzprofile create <profilename>
+        
+        Parameters:
+        <profilename>: Name of the new profile to be created.
+        """
+        # parse the command line arguments
+        args = parameter_s.split()
+        if len(args) < 2 or args[0] != 'create':
+            print("Usage: %qzprofile create <profilename>")
+            return
+        
+        profile_name = args[1]
+        profile_dir = os.path.join(self.user_profile_dir, profile_name)
+        
+        # create the profile directory if it doesn't exist
+        if not os.path.exists(profile_dir):
+            os.makedirs(profile_dir)
+        
+        # create an empty __init__.py file in the profile directory to make it a Python package
+        init_file = os.path.join(profile_dir, "__init__.py")
+        with open(init_file, "w") as f:
+            pass
+        
+        # print the path to the new profile directory
+        print("Profile created: ", profile_dir)
+

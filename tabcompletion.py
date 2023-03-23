@@ -300,14 +300,16 @@ def get_completions(self, event):
     
     ---------------------------------------
     
-    def get_completions(self, info):
-        # Check if user input starts with "qz."
-        if info["text_until_cursor"].startswith("qz."):
-            # Get the remaining text after "qz."
-            remainder = info["text_until_cursor"][3:]
-            # Get module paths that start with the remaining text
-            paths = self.srcdb.runasync(self.path_completions(self.uri, "/"))
-            completions = [path for path in paths if path.startswith(remainder)]
-            return [Completion(completion, start_position=-len(remainder)) for completion in completions]
+    def get_completions(self, text, line, cursor_pos, context=None):
+        if line.startswith('qz.'):
+            # Get the input text after 'qz.'
+            input_text = line[len('qz.'):cursor_pos]
+            # Get module paths that start with the input text
+            module_paths = [path for path in self.path_completions(self.uri, '') if path.startswith(input_text)]
+            # Get the unique prefixes of module paths
+            prefixes = {path.split('.', 1)[0] for path in module_paths}
+            # Generate completion candidates in the format 'qz.<prefix>'
+            completions = [CompletionItem(f'qz.{prefix}', start_position=-len(input_text)) for prefix in prefixes]
+            return completions
         else:
             return []

@@ -297,3 +297,17 @@ def get_completions(self, event):
         event.completions = completions
         
         return event
+    
+    ---------------------------------------
+    
+    def get_completions(self, info):
+        # Check if user input starts with "qz."
+        if info["text_until_cursor"].startswith("qz."):
+            # Get the remaining text after "qz."
+            remainder = info["text_until_cursor"][3:]
+            # Get module paths that start with the remaining text
+            paths = self.srcdb.runasync(self.path_completions(self.uri, "/"))
+            completions = [path for path in paths if path.startswith(remainder)]
+            return [Completion(completion, start_position=-len(remainder)) for completion in completions]
+        else:
+            return []

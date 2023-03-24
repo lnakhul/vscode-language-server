@@ -1,44 +1,60 @@
-from IPython.core.profiledir import ProfileDir
-from IPython.terminal.ipapp import load_default_config
+import os
+from IPython.core.profileapp import ProfileApp
+from IPython.paths import get_ipython_dir
+import shutil
+from IPython.core.magic import Magics, magics_class, line_magic
+import argparse
+from IPython.core.magic import line_magic, Magics, magics_class
 
-class UserProfile:
-    def __init__(self, profile_name='default'):
-        self.profile_name = profile_name
-        self.profile_dir = ProfileDir.create_profile_dir(profile_name)
-        self.config = load_default_config()
-        self.config.TerminalInteractiveShell.autoreload = True
-        
-        self.srcdb = None  # set by `set_srcdb()` method
-        self._setup_magic()
+@magics_class
+class ProfileMagics(Magics):
+    
+    @line_magic
+    def profile(self, line):
+        parser = argparse.ArgumentParser(prog='%profile', description='Manage profiles.')
+        subparsers = parser.add_subparsers(dest='subcommand', required=True)
 
-    def set_srcdb(self, srcdb):
-        self.srcdb = srcdb
+        create_parser = subparsers.add_parser('create', help='Create a new profile.')
+        create_parser.add_argument('profile_name', help='Name of the profile to create.')
 
-    def _setup_magic(self):
-        from IPython.core.magic import register_line_magic
-        from IPython.extensions.autoreload import AutoreloadMagics
+        delete_parser = subparsers.add_parser('delete', help='Delete a profile.')
+        delete_parser.add_argument('profile_name', help='Name of the profile to delete.')
 
-        # register %qzreload and %qzimport magics
-        self.config.InteractiveShellApp.extensions = [
-            'IPython.extensions.autoreload', 'quartz_extension'
-        ]
-        
-        @register_line_magic
-        def qzreload(line):
-            quartz_magic = self._get_quartz_magic()
-            quartz_magic.qzreload(line)
+        switch_parser = subparsers.add_parser('switch', help='Switch to a specific profile.')
+        switch_parser.add_argument('profile_name', help='Name of the profile to switch to.')
 
-        @register_line_magic
-        def qzimport(line):
-            quartz_magic = self._get_quartz_magic()
-            quartz_magic.qzimport(line)
+        args = parser.parse_args(line.split())
 
-        # add AutoreloadMagics
-        autoreload_magic = AutoreloadMagics(shell=self.config.TerminalInteractiveShell)
-        autoreload_magic.extension = 'quartz_extension'
-        autoreload_magic.post_config()
+        if args.subcommand == 'create':
+            self.create_profile(args.profile_name)
+        elif args.subcommand == 'delete':
+            self.delete_profile(args.profile_name)
+        elif args.subcommand == 'switch':
+            self.switch_profile(args.profile_name)
 
-    def _get_quartz_magic(self):
-        from IPython.core.magic import get_magics_class
-        QuartzReloadMagics = get_magics_class(['quartz_extension'], 'QuartzReloadMagics')
-        return QuartzReloadMagics(shell=self.config.TerminalInteractiveShell, srcdb=self.srcdb)
+    @line_magic
+    def create_profile(self, profile_name):
+        app = ProfileApp()
+        app.config_file_name = f"ipython_config_{profile_name}.py"
+        app.profile_dir = os.path.join(get_ipython_dir(), f"profile_{profile_name}")
+        app.initialize([])
+        app.start()
+        print(f"Created profile: {profile_name}")
+
+    @line_magic
+    def delete_profile(self, profile_name):
+        profile_dir = os.path.join(get_ipython_dir(), f"profile_{profile_name}")
+        if os.path.exists(profile_dir):
+            shutil.rmtree(profile_dir)
+            print(f"Deleted profile: {profile_name}")
+        else:
+            print(f"No profile found with the name: {profile_name}")
+
+    @line_magic
+    def switch_profile(self, profile_name):
+        profile_dir = os.path.join(get_ipython_dir(), f"profile_{profile_name}")
+        if os.path.exists(profile_dir):
+            os.environ["IPYTHONDIR"] = profile_dir
+            print(f"Switched to profile: {profile_name}")
+        else:
+            print(f"No profile found with the name: {profile_name}")

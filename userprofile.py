@@ -58,3 +58,72 @@ class ProfileMagics(Magics):
             print(f"Switched to profile: {profile_name}")
         else:
             print(f"No profile found with the name: {profile_name}")
+            
+           --------------------------------------------------------------------------
+        
+        from IPython.core.profiledir import ProfileDir
+from IPython.core.magic import line_magic, Magics, magics_class
+from IPython.core.getipython import get_ipython
+
+@magics_class
+class CustomProfileMagics(Magics):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile_dir = ProfileDir.create_profile_dir()
+    
+    @line_magic
+    def profile_create(self, parameter_s=''):
+        """Create a new profile with the given name."""
+        if not parameter_s:
+            print("Usage: %profile_create <profile_name>")
+            return
+        profile_name = parameter_s.strip()
+        if self.profile_dir.profile_exists(profile_name):
+            print(f"Profile '{profile_name}' already exists.")
+            return
+        self.profile_dir.copy_config_to_profile(profile_name)
+        print(f"Profile '{profile_name}' created.")
+    
+    @line_magic
+    def profile_switch(self, parameter_s=''):
+        """Switch to the given profile."""
+        if not parameter_s:
+            print("Usage: %profile_switch <profile_name>")
+            return
+        profile_name = parameter_s.strip()
+        if not self.profile_dir.profile_exists(profile_name):
+            print(f"Profile '{profile_name}' does not exist.")
+            return
+        self.profile_dir.switch_profile(profile_name)
+        print(f"Switched to profile '{profile_name}'.")
+    
+    @line_magic
+    def profile_delete(self, parameter_s=''):
+        """Delete the given profile."""
+        if not parameter_s:
+            print("Usage: %profile_delete <profile_name>")
+            return
+        profile_name = parameter_s.strip()
+        if not self.profile_dir.profile_exists(profile_name):
+            print(f"Profile '{profile_name}' does not exist.")
+            return
+        self.profile_dir.delete_profile(profile_name)
+        print(f"Profile '{profile_name}' deleted.")
+    
+    @line_magic
+    def profile_startup(self, parameter_s=''):
+        """Create a startup script for the current profile."""
+        profile_name = self.profile_dir.active_profile
+        startup_file = self.profile_dir.get_startup_file()
+        with open(startup_file, 'w') as f:
+            f.write(parameter_s)
+        print(f"Startup script saved for profile '{profile_name}'.")
+    
+    @line_magic
+    def profile_config(self, parameter_s=''):
+        """Open the configuration file for the current profile."""
+        profile_name = self.profile_dir.active_profile
+        config_file = self.profile_dir.get_config_file()
+        get_ipython().system_editor(config_file)
+        print(f"Configuration file opened for profile '{profile_name}'.")
+

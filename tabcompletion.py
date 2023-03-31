@@ -313,3 +313,37 @@ def get_completions(self, event):
             return completions
         else:
             return []
+        
+        ----------------------------------------
+        
+         completions_list = [Completion(text=comp, start_position=-len(remainder)) for comp in completions]
+            layout = create_prompt_layout(
+                message='Completions:',
+                reserve_space_for_menu=True
+            )
+            eventloop = create_eventloop()
+            result = eventloop.run_until_complete(self.show_completions(layout, completions_list))
+            if result is not None:
+                completion_text = result.text
+            else:
+                return
+        else:
+            return
+
+        start_position = -len(remainder)
+        return [Completion(text=completion_text, start_position=start_position, display=None, display_meta=None)]
+
+    async def show_completions(self, layout, completions):
+        def get_toolbar_tokens():
+            return [('class:toolbar', 'Use the arrow keys to navigate, or press Tab to select a completion.')]
+
+        menu = CompletionVisualisation(
+            max_height=12,
+            extra_filter=HasPrefix(),
+            show_meta=True,
+            menu_position=CursorPosition.POSTFIX,
+            menu_width=80,
+            toolbar_tokens=get_toolbar_tokens,
+            scrollbar=True,
+            display_arrows=True,
+            ignore_case=True,

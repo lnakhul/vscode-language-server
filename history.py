@@ -49,9 +49,3 @@ class SandraHistoryManager(HistoryManager):
             tail = hist[-n:]
             for lineno, line in enumerate(tail, start=len(hist) - len(tail) + 1):
                 yield (session, lineno, line.rstrip())
-
-def load_ipython_extension(ip):
-    # ...
-    # Replace the original HistoryManager with the custom SandraHistoryManager
-    ip.history_manager = SandraHistoryManager(shell=ip)
-    # ...

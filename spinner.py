@@ -1,3 +1,5 @@
+import asyncio
+
 class Spinner:
     def __init__(self, message="Loading"):
         self._message = message
@@ -27,28 +29,36 @@ class Spinner:
         spinner_symbol = self._spin_symbols[self._spin_index]
         return [(None, f'{self._message} {spinner_symbol}')]
 
-    async def _spinner_task(self):
+    def _update_spinner(self):
         while self._loading:
             self._control.text = self._get_spinner_text()
             app = get_app()
             if app:
                 app.invalidate()
-            await asyncio.sleep(0.1)
+            time.sleep(0.1)
 
     def start(self):
         print("Spinner start")
         self._loading = True
-        self.loop = asyncio.get_event_loop()
-        if self.loop.is_running():
-            asyncio.create_task(self._spinner_task())
-        else:
-            self.loop.run_until_complete(self._spinner_task())
+        self._thread = threading.Thread(target=self._update_spinner)
+        self._thread.start()
         print("Spinner start complete")
 
     def stop(self):
         print("Spinner stop")
         self._loading = False
-        app = get_app()
-        if app:
-            app.exit()
+        self._thread.join()
         print("Spinner stop complete")
+
+
+def setup_logging(): 
+    spinner = Spinner('Logging PID... ')
+    
+    def do_logging():
+        print("Starting logging")
+        logging.info('PID: %d', os.getpid())
+        print("Logging complete")
+    
+    spinner.start()
+    threading.Thread(target=do_logging).start()
+    spinner.stop()

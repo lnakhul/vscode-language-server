@@ -5,6 +5,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
+import threading
 
 class Spinner:
     def __init__(self, message="Loading"):
@@ -28,18 +29,19 @@ class Spinner:
         return app
 
     def _get_spinner_text(self):
-        if self._loading:
-            self._spin_index = (self._spin_index + 1) % len(self._spin_symbols)
-            spinner_symbol = self._spin_symbols[self._spin_index]
-        else:
-            spinner_symbol = ' '
-
+        if not self._loading:
+            return [(None, f'{self._message}')]
+        
+        self._spin_index = (self._spin_index + 1) % len(self._spin_symbols)
+        spinner_symbol = self._spin_symbols[self._spin_index]
         return [(None, f'{self._message} {spinner_symbol}')]
 
     def _update_spinner(self):
         while self._loading:
             self._control.text = self._get_spinner_text()
-            get_app().invalidate()
+            app = get_app()
+            if app:
+                app.invalidate()
             time.sleep(0.1)
 
     def start(self):
@@ -49,4 +51,6 @@ class Spinner:
 
     def stop(self):
         self._loading = False
-        get_app().exit()
+        app = get_app()
+        if app:
+            app.exit()

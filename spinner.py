@@ -1,11 +1,10 @@
-import time
+import asyncio
 from prompt_toolkit import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
-import threading
 
 class Spinner:
     def __init__(self, message="Loading"):
@@ -36,18 +35,22 @@ class Spinner:
         spinner_symbol = self._spin_symbols[self._spin_index]
         return [(None, f'{self._message} {spinner_symbol}')]
 
-    def _update_spinner(self):
+    async def _update_spinner(self):
         while self._loading:
             self._control.text = self._get_spinner_text()
             app = get_app()
             if app:
                 app.invalidate()
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
 
     def start(self):
         self._loading = True
-        threading.Thread(target=self._update_spinner).start()
+        asyncio.run(self._spinner_task())
         self._app.run()
+
+    async def _spinner_task(self):
+        task = asyncio.ensure_future(self._update_spinner())
+        await task
 
     def stop(self):
         self._loading = False

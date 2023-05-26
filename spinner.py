@@ -66,26 +66,24 @@ def my_exc_handler(shell, etype, evalue, tb, tb_offset=None):
 get_ipython().set_custom_exc((Exception,), my_exc_handler)
 
 
-from IPython.core.ultratb import AutoFormattedTB
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import TerminalFormatter
+from IPython.core.ultratb import ColorTB
 
-# Create a custom exception handler
-def custom_exc(shell, etype, evalue, tb, tb_offset=None):
-    # Use IPython's default traceback formatting
-    stb = AutoFormattedTB(mode='Plain', color_scheme='Linux', tb_offset=tb_offset)
-    s = stb.structured_traceback(etype, evalue, tb)
-    print(''.join(s))
+class SyntaxHighlightingFormatter(ColorTB):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lexer = PythonLexer()
+        self.formatter = TerminalFormatter()
 
-    # Get the last traceback and its frame
-    last_tb = tb
-    while last_tb.tb_next:
-        last_tb = last_tb.tb_next
-    last_frame = last_tb.tb_frame
+    def format_exception_as_a_whole(self, etype, evalue, etb, number_of_lines_of_context, tb_offset):
+        lines = super().format_exception_as_a_whole(etype, evalue, etb, number_of_lines_of_context, tb_offset)
+        for i in range(len(lines)):
+            if lines[i].startswith('---->'):
+                lines[i] = highlight(lines[i], self.lexer, self.formatter).strip()
+        return lines
 
-    # If the frame contains code, print a syntax-highlighted version of it
-    code = last_frame.f_globals.get(last_frame.f_code.co_name)
-    if code:
-        print(highlight(code, PythonLexer(), TerminalFormatter()))
+get_ipython().InteractiveTB = SyntaxHighlightingFormatter()
+
 

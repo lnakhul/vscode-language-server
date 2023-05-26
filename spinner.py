@@ -43,3 +43,25 @@ class Spinner:
         write('\r' + ' ' * (len(self._message) + 2) + '\r')
         flush()
 
+        
+  from pygments import highlight
+from pygments.lexers import PythonLexer
+from pygments.formatters import TerminalFormatter
+from traceback import format_exception
+
+def my_exc_handler(shell, etype, evalue, tb, tb_offset=None):
+    # Format the exception
+    traceback_lines = format_exception(etype, evalue, tb)
+    traceback_text = ''.join(traceback_lines)
+
+    # Highlight the traceback
+    lexer = PythonLexer()
+    formatter = TerminalFormatter()
+    traceback_highlighted = highlight(traceback_text, lexer, formatter)
+
+    # Print the traceback
+    shell.showtraceback((etype, evalue, tb), tb_offset=tb_offset)
+    print(traceback_highlighted)
+
+get_ipython().set_custom_exc((Exception,), my_exc_handler)
+

@@ -6,7 +6,7 @@ import itertools
 class Spinner:
     def __init__(self, message='Loading'):
         self._message = message
-        self._spin_symbols = ['|', '/', '-', '\\']
+        self._spin_symbols = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
         self._thread = None
         self._lock = threading.Lock()
         self._loading = False
@@ -42,3 +42,4 @@ class Spinner:
         write, flush = sys.stdout.write, sys.stdout.flush
         write('\r' + ' ' * (len(self._message) + 2) + '\r')
         flush()
+

@@ -175,6 +175,7 @@ class ColorizedTB(ultratb.ListTB):
     """A simple traceback printer which colorizes the output."""
 
     def __init__(self, color_scheme='Linux', call_pdb=False):
+        # Here we pass color_scheme as a string, not an InteractiveShell instance.
         super().__init__(color_scheme=color_scheme, call_pdb=call_pdb)
         self.lexer = PythonLexer()
         self.formatter = TerminalFormatter(bg='dark')
@@ -184,7 +185,8 @@ class ColorizedTB(ultratb.ListTB):
         return self.text(etype, evalue, etb)
 
     def text(self, etype, evalue, etb):
-        traceback_lines = traceback.format_exception(etype, evalue, etb)
-        highlighted_traceback = [highlight(line, self.lexer, self.formatter) for line in traceback_lines]
-        return "".join(highlighted_traceback)
+        traceback_text = "".join(traceback.format_exception(etype, evalue, etb))
+        highlighted_traceback = highlight(traceback_text, self.lexer, self.formatter)
+        return highlighted_traceback
+
 

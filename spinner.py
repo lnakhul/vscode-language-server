@@ -87,3 +87,50 @@ class SyntaxHighlightingFormatter(ColorTB):
 get_ipython().InteractiveTB = SyntaxHighlightingFormatter()
 
 
+class QuartzExceptionFormatter(ultratb.FormattedTB):
+    """A Formatter that colorizes the traceback.
+    """
+    def __init__(self, ip):
+        self.shell = ip
+        self.tb_offset = 1
+        self.color_scheme = 'Linux'
+        self.include_vars = True
+        self.long_header = True
+        self.call_pdb = False
+        self.justify = True
+        self.num_width = 4
+        self.repr = False
+        self.include_rebuilt = False
+        self.tb_offset = 1
+        self.syntaxerror_formatter = None
+        self.pdb = None
+        self.prompt_manager = PromptManager(shell=ip)
+        self.pdb_cls = None
+        self.tb = None
+        self.tb_lastline_indent = 0
+        self.stb = None
+        self.stb_lastline_indent = 0
+        self.tb_offset = 0
+        self.tb_offset = 1
+        
+    def __call__(self, etype, evalue, etb, tb_offset=None, context=5,
+                 exception_only=False, tb_colors=None, chain=True):
+        self.tb_offset = tb_offset or self.tb_offset
+        return super().__call__(etype, evalue, etb, tb_offset, context,
+                 exception_only, tb_colors, chain)
+    
+    def structured_traceback(self, etype, value, tb, tb_offset=None,
+                                context=5, mode=None):
+            self.tb_offset = tb_offset or self.tb_offset
+            return super().structured_traceback(etype, value, tb, tb_offset, context,
+                                mode)
+    
+    def text(self, etype=None, value=None, tb=None, tb_offset=None,
+                context=5, chain=True):
+            self.tb_offset = tb_offset or self.tb_offset
+            return super().text(etype, value, tb, tb_offset, context, chain)
+    
+    def colorize_traceback(self, exc_tuple, tb_offset=None, chain=True):
+            self.tb_offset = tb_offset or self.tb_offset
+            return super().colorize_traceback(exc_tuple, tb_offset, chain)
+

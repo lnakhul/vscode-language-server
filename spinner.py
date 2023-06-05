@@ -133,4 +133,37 @@ class QuartzExceptionFormatter(ultratb.FormattedTB):
     def colorize_traceback(self, exc_tuple, tb_offset=None, chain=True):
             self.tb_offset = tb_offset or self.tb_offset
             return super().colorize_traceback(exc_tuple, tb_offset, chain)
+        
+
+class ColorizedTB(ultratb.ListTB):
+    """A simple traceback printer which colorizes the output."""
+
+    def __init__(self, color_scheme='Linux', call_pdb=False):
+        super().__init__(color_scheme=color_scheme, call_pdb=call_pdb)
+
+    def __call__(self, etype, evalue, etb, tb_offset=None, context=1):
+        # We are ignoring tb_offset and context here to keep things simple.
+        # etb:   exception traceback
+        # etype: exception type
+        # evalue: exception value
+        self.tb = etb
+        return self.text(etype, evalue, etb)
+
+    def text(self, etype, evalue, etb):
+        """Return a colorized string representation of the traceback."""
+        colors = self.Colors  # This is a color table from ultratb
+        etype_color = colors.normal  # Color for the exception type
+        evalue_color = colors.excName  # Color for the exception value
+        tb_color = colors.line  # Color for the traceback
+
+        # Format the traceback
+        traceback_lines = traceback.format_exception(etype, evalue, etb)
+        colored_traceback = [tb_color + line for line in traceback_lines]
+
+        # Format the exception
+        colored_exception = [etype_color + etype.__name__,
+                             evalue_color + str(evalue)]
+
+        return "\n".join(colored_traceback + colored_exception)
+
 

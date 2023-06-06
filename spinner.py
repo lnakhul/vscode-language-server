@@ -188,5 +188,22 @@ class ColorizedTB(ultratb.ListTB):
         traceback_text = "".join(traceback.format_exception(etype, evalue, etb))
         highlighted_traceback = highlight(traceback_text, self.lexer, self.formatter)
         return highlighted_traceback
+    
+  import traceback
+from termcolor import colored
+
+class QzwinCompatibleShell(TerminalInteractiveShell):
+    # Your existing code...
+
+    def showtraceback(self, etype=None, evalue=None, tb=None):
+        """
+        Display the exception that just occurred.
+        """
+        if etype is None:
+            etype, evalue, tb = sys.exc_info()
+
+        traceback_lines = traceback.format_exception(etype, evalue, tb)
+        colored_traceback = colored('\n'.join(traceback_lines), 'red')
+        self.write_err(colored_traceback)  
 
 

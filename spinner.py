@@ -351,4 +351,51 @@ def format(self, record):
 
         return self.default_formatter.format(record)
 
+from termcolor import colored
+import logging
+import re
+
+class CustomFormatter(logging.Formatter):
+    """A custom formatter that adds syntax highlighting to the different log levels."""
+
+    FORMAT = "%(asctime)s (%(process)d) %(name)s %(levelname)s - %(message)s"
+
+    LEVELNAME_COLORS = {
+        logging.DEBUG: ('white', ['dark']),
+        logging.INFO: ('green', ['bold']),
+        logging.WARNING: ('yellow', []),
+        logging.ERROR: ('red', []),
+        logging.CRITICAL: ('red', ['bold']),
+    }
+
+    COMPONENT_COLORS = {
+        'asctime': ('blue', []),
+        'message': ('white', []),
+        'name': ('magenta', []), 
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(self.FORMAT, *args, **kwargs)
+
+    def format(self, record):
+        # Use original formatter to get the formatted record
+        formatted = super().format(record)
+
+        # Colorize levelname
+        levelname = record.levelname
+        color, attrs = self.LEVELNAME_COLORS[record.levelno]
+        colored_levelname = colored(levelname, color, attrs=attrs)
+        formatted = formatted.replace(levelname, colored_levelname)
+
+        # Colorize components
+        for key in self.COMPONENT_COLORS.keys():
+            component = str(record.__dict__[key])
+            color, attrs = self.COMPONENT_COLORS[key]
+            colored_component = colored(component, color, attrs=attrs)
+
+            # Use regular expression to replace the component in the formatted string
+            pattern = re.compile(r'\b' + re.escape(component) + r'\b')
+            formatted = pattern.sub(colored_component, formatted)
+
+        return formatted
 

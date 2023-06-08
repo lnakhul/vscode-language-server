@@ -263,3 +263,18 @@ logger.error('This is an error message.')
 logger.critical('This is a critical message.')
 
 logger.critical('This is a critical message.')
+
+def format(self, record):
+        """Format the record with syntax highlighting."""
+      
+        # Format the record with syntax highlighting.
+        level_color, level_attrs = self.LEVEL_COLORS.get(record.levelno)
+        component_colors = {k: self.COMPONENT_COLORS[k] for k in self.COMPONENT_COLORS if k in record.__dict__}
+        return self.format_with_colors(level_color, level_attrs, component_colors, **record.__dict__)
+    
+    def format_with_colors(self, level_color, level_attrs, component_colors, **kwargs):
+        """Format the record with syntax highlighting."""
+        # Format the record with syntax highlighting.
+        level_color, level_attrs = self.LEVEL_COLORS.get(kwargs['levelno'])
+        component_colors = {k: self.COMPONENT_COLORS[k] for k in self.COMPONENT_COLORS if k in kwargs}
+        return self.format_with_colors(level_color, level_attrs, component_colors, **kwargs)

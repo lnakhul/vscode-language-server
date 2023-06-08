@@ -206,10 +206,13 @@ class QzwinCompatibleShell(TerminalInteractiveShell):
         colored_traceback = colored('\n'.join(traceback_lines), 'red')
         self.write_err(colored_traceback)  
 
- class CustomFormatter(QzFormatter):
+import logging
+from termcolor import colored
+
+class CustomFormatter(logging.Formatter):
     """A custom formatter that adds syntax highlighting to the different log levels."""
 
-    format = QzFormatter.FORMAT
+    DEFAULT_FORMAT = '%(asctime)s - %(filename)s - %(levelname)s - %(message)s'
 
     LEVEL_COLORS = {
         logging.DEBUG: ('cyan', []),
@@ -224,8 +227,11 @@ class QzwinCompatibleShell(TerminalInteractiveShell):
         'levelname': ('black', ['bold']),
         'message': ('white', []),
         'filename': ('magenta', []),  # Custom color for 'filename'
-        # Add more components as needed...
     }
+
+    def __init__(self, fmt=DEFAULT_FORMAT, datefmt=None, style='%'):
+        super().__init__(fmt, datefmt, style)
+        self.fmt = fmt
 
     def format(self, record):
         # Default color and style for components
@@ -233,14 +239,12 @@ class QzwinCompatibleShell(TerminalInteractiveShell):
 
         # Process each component in the format
         msg = []
-        for component in self.format.split('%'):
+        for component in self.fmt.split('%'):
             if not component: continue
             key = component.split('(')[-1].split(')')[0]
             component_color, component_style = self.COMPONENT_COLORS.get(key, (color, style))
             msg.append(colored(f"%{component}", component_color, attrs=component_style))
-        formatter = logging.Formatter(''.join(msg))
-        return formatter.format(record)
-
+        return super().format(record)._fmt.join(msg)
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -252,4 +256,6 @@ logger.debug('This is a debug message.')
 logger.info('This is an info message.')
 logger.warning('This is a warning message.')
 logger.error('This is an error message.')
+logger.critical('This is a critical message.')
+
 logger.critical('This is a critical message.')

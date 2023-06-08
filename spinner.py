@@ -278,3 +278,12 @@ def format(self, record):
         level_color, level_attrs = self.LEVEL_COLORS.get(kwargs['levelno'])
         component_colors = {k: self.COMPONENT_COLORS[k] for k in self.COMPONENT_COLORS if k in kwargs}
         return self.format_with_colors(level_color, level_attrs, component_colors, **kwargs)
+    
+    def format(self, record):
+        """Format the record with syntax highlighting."""
+        format = self.FORMATS.get(record.levelno, self.format)
+        levelColor, levelAttrs = self.LEVEL_COLORS.get(record.levelno, ('white', []))
+        record.levelname = colored(record.levelname, levelColor, attrs=levelAttrs)
+        for component, (color, attrs) in self.COMPONENT_COLORS.items():
+            setattr(record, component, colored(getattr(record, component), color, attrs=attrs))
+        return format.format(**record.__dict__)

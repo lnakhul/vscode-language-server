@@ -206,4 +206,39 @@ class QzwinCompatibleShell(TerminalInteractiveShell):
         colored_traceback = colored('\n'.join(traceback_lines), 'red')
         self.write_err(colored_traceback)  
 
+ class CustomFormatter(QzFormatter):
+    """A custom formatter that adds syntax highlighting to the different log levels."""
+
+    format = QzFormatter.FORMAT
+
+    LEVEL_COLORS = {
+        logging.DEBUG: ('cyan', []),
+        logging.INFO: ('green', ['bold']),
+        logging.WARNING: ('yellow', ['bold']),
+        logging.ERROR: ('red', []),
+        logging.CRITICAL: ('red', ['bold']),
+    }
+
+    COMPONENT_COLORS = {
+        'asctime': ('blue', []),
+        'levelname': ('black', ['bold']),
+        'message': ('white', []),
+        'filename': ('magenta', []),  # Custom color for 'filename'
+        # Add more components as needed...
+    }
+
+    def format(self, record):
+        # Default color and style for components
+        color, style = self.LEVEL_COLORS.get(record.levelno, ('white', []))
+
+        # Process each component in the format
+        msg = []
+        for component in self.format.split('%'):
+            if not component: continue
+            key = component.split('(')[-1].split(')')[0]
+            component_color, component_style = self.COMPONENT_COLORS.get(key, (color, style))
+            msg.append(colored(f"%{component}", component_color, attrs=component_style))
+        formatter = logging.Formatter(''.join(msg))
+        return formatter.format(record)
+
 

@@ -209,42 +209,46 @@ class QzwinCompatibleShell(TerminalInteractiveShell):
 import logging
 from termcolor import colored
 
-class CustomFormatter(logging.Formatter):
+class CustomFormatter(QzFormatter):
     """A custom formatter that adds syntax highlighting to the different log levels."""
 
-    DEFAULT_FORMAT = '%(asctime)s - %(filename)s - %(levelname)s - %(message)s'
+    format = QzFormatter.FORMAT
+    FORMATS = {
+        logging.DEBUG: colored(format, 'white', attrs=['dark']),
+        logging.INFO: colored(format, 'green', attrs=['bold']),
+        logging.WARNING: colored(format, 'yellow'),
+        logging.ERROR: colored(format, 'red'),
+        logging.CRITICAL: colored(format, 'red', attrs=['bold']),
+    }
 
-    LEVEL_COLORS = {
-        logging.DEBUG: ('cyan', []),
+    LEVELNAME_COLORS = {
+        logging.DEBUG: ('white', ['dark']),
         logging.INFO: ('green', ['bold']),
-        logging.WARNING: ('yellow', ['bold']),
+        logging.WARNING: ('yellow', []),
         logging.ERROR: ('red', []),
         logging.CRITICAL: ('red', ['bold']),
     }
 
     COMPONENT_COLORS = {
         'asctime': ('blue', []),
-        'levelname': ('black', ['bold']),
         'message': ('white', []),
-        'filename': ('magenta', []),  # Custom color for 'filename'
+        'filename': ('magenta', []), 
     }
 
-    def __init__(self, fmt=DEFAULT_FORMAT, datefmt=None, style='%'):
-        super().__init__(fmt, datefmt, style)
-        self.fmt = fmt
-
     def format(self, record):
-        # Default color and style for components
-        color, style = self.LEVEL_COLORS.get(record.levelno, ('white', []))
+        components = record.__dict__
+        for key, value in components.items():
+            if key in self.COMPONENT_COLORS:
+                color, attrs = self.COMPONENT_COLORS[key]
+                components[key] = colored(str(value), color, attrs=attrs)
+            elif key == 'levelname':
+                color, attrs = self.LEVELNAME_COLORS[record.levelno]
+                components[key] = colored(str(value), color, attrs=attrs)
 
-        # Process each component in the format
-        msg = []
-        for component in self.fmt.split('%'):
-            if not component: continue
-            key = component.split('(')[-1].split(')')[0]
-            component_color, component_style = self.COMPONENT_COLORS.get(key, (color, style))
-            msg.append(colored(f"%{component}", component_color, attrs=component_style))
-        return super().format(record)._fmt.join(msg)
+        log_fmt = self.FORMATS.get(record.levelno, self.format)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()

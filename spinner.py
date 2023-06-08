@@ -310,9 +310,21 @@ def format(self, record):
     }
 
     COMPONENT_COLORS = {
-        'asctime': ('blue', []),
-        'message': ('white', []),
-        'filename': ('magenta', []), 
+        'name': ('white', ['dark']),
+        'levelname': ('white', ['dark']),
+        'pathname': ('white', ['dark']),
+        'filename': ('white', ['dark']),
+        'module': ('white', ['dark']),
+        'lineno': ('white', ['dark']),
+        'funcName': ('white', ['dark']),
+        'created': ('white', ['dark']),
+        'asctime': ('white', ['dark']),
+        'msecs': ('white', ['dark']),
+        'relativeCreated': ('white', ['dark']),
+        'thread': ('white', ['dark']),
+        'threadName': ('white', ['dark']),
+        'process': ('white', ['dark']),
+        'message': ('white', ['dark']),
     }
 
     def __init__(self, *args, **kwargs):

@@ -287,3 +287,56 @@ def format(self, record):
         for component, (color, attrs) in self.COMPONENT_COLORS.items():
             setattr(record, component, colored(getattr(record, component), color, attrs=attrs))
         return format.format(**record.__dict__)
+
+    
+    class CustomFormatter(QzFormatter):
+    """A custom formatter that adds syntax highlighting to the different log levels."""
+
+    fmt = QzFormatter.FORMAT
+    FORMATS = {
+        logging.DEBUG: colored(fmt, 'white', attrs=['dark']),
+        logging.INFO: colored(fmt, 'green', attrs=['bold']),
+        logging.WARNING: colored(fmt, 'yellow'),
+        logging.ERROR: colored(fmt, 'red'),
+        logging.CRITICAL: colored(fmt, 'red', attrs=['bold']),
+    }
+
+    LEVELNAME_COLORS = {
+        logging.DEBUG: ('white', ['dark']),
+        logging.INFO: ('green', ['bold']),
+        logging.WARNING: ('yellow', []),
+        logging.ERROR: ('red', []),
+        logging.CRITICAL: ('red', ['bold']),
+    }
+
+    COMPONENT_COLORS = {
+        'asctime': ('blue', []),
+        'message': ('white', []),
+        'filename': ('magenta', []), 
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_formatter = logging.Formatter(self.fmt)
+
+    def format(self, record):
+        components = record.__dict__.copy()  # Create a copy to avoid modifying the original record
+        for key, value in components.items():
+            if key in self.COMPONENT_COLORS:
+                color, attrs = self.COMPONENT_COLORS[key]
+                components[key] = colored(str(value), color, attrs=attrs)
+            elif key == 'levelname':
+                color, attrs = self.LEVELNAME_COLORS[record.levelno]
+                components[key] = colored(str(value), color, attrs=attrs)
+
+        # Support for extra fields
+        if record.args:
+            for key in record.args:
+                if key not in record.__dict__:
+                    components[key] = record.args[key]
+
+        record.__dict__.update(components)
+
+        return self.default_formatter.format(record)
+
+

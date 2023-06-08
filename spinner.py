@@ -398,4 +398,23 @@ class CustomFormatter(logging.Formatter):
             formatted = pattern.sub(colored_component, formatted)
 
         return formatted
+    
+    
+def init_prompt_toolkit_cli(self):
+        # Call the parent method to initialize cli
+        super().init_prompt_toolkit_cli()
+        
+        # Access the currently created cli object
+        cli = self.pt_app
 
+        # Define a new layout that includes the toolbar and prompt without wrapping
+        layout = prompt_toolkit.layout.Layout(
+            prompt_toolkit.layout.HSplit([
+                prompt_toolkit.layout.Window(content=prompt_toolkit.layout.controls.BufferControl(buffer_name="default")),
+                prompt_toolkit.layout.Window(height=1, char="-"),
+                prompt_toolkit.layout.Window(content=prompt_toolkit.layout.controls.FormattedTextControl(self.pt_app.bottom_toolbar))
+            ])
+        )
+
+        # Replace the application layout with the new one
+        cli.layout = layout

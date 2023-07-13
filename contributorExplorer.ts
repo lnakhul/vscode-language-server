@@ -69,3 +69,55 @@ export class ContributorDataProvider extends ScmDataProvider {
     this.setChildren(children);
   }
 }
+------------------------------------------------
+
+// Contributor information
+export interface ContributorInfo {
+    username: string;
+    contributions: number;
+    avatarUrl: string;
+    profileUrl: string;
+}
+
+// Contributor tree item
+export class ContributorTreeItem extends vscode.TreeItem {
+    constructor(public readonly contributorInfo: ContributorInfo) {
+        super(contributorInfo.username, vscode.TreeItemCollapsibleState.None);
+        
+        this.description = `Contributions: ${contributorInfo.contributions}`;
+        this.tooltip = `${this.contributorInfo.username} - Click to open profile.`;
+        this.iconPath = vscode.Uri.parse(contributorInfo.avatarUrl);
+        this.command = {
+            command: 'extension.openContributorProfile', 
+            title: 'Open Contributor Profile', 
+            arguments: [contributorInfo.profileUrl]
+        };
+    }
+}
+
+// Contributor data provider
+export class ContributorDataProvider implements vscode.TreeDataProvider<ContributorTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<ContributorTreeItem | undefined> = new vscode.EventEmitter<ContributorTreeItem | undefined>();
+    readonly onDidChangeTreeData: vscode.Event<ContributorTreeItem | undefined> = this._onDidChangeTreeData.event;
+    
+    constructor(private proxyManager: ProxyManager) {
+        // register command for opening contributor profile
+        vscode.commands.registerCommand('extension.openContributorProfile', (profileUrl: string) => {
+            vscode.env.openExternal(vscode.Uri.parse(profileUrl));
+        });
+    }
+    
+    // Fetch contributors
+    getTreeItem(element: ContributorTreeItem): vscode.TreeItem {
+        return element;
+    }
+    
+    async getChildren(): Promise<ContributorTreeItem[]> {
+        const contributorInfos: ContributorInfo[] = await this.proxyManager.sendRequest<ContributorInfo[]>(null, 'get:contributors');
+        return contributorInfos.map(info => new ContributorTreeItem(info));
+    }
+    
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+}

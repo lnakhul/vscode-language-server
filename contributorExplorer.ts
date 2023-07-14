@@ -240,6 +240,59 @@ export class ContributorExplorer extends BaseTreeExplorerView implements vscode.
   }
 }
 
+-----------------------------------
+
+import * as vscode from 'vscode';
+import * as nodegit from 'nodegit';
+
+class Contributor extends vscode.TreeItem {
+  constructor(public readonly name: string, public readonly email: string) {
+    super(name, vscode.TreeItemCollapsibleState.None);
+    this.description = email;
+    this.tooltip = `${this.name} <${this.email}>`;
+  }
+
+  iconPath = new vscode.ThemeIcon('account');
+}
+
+class ContributorProvider implements vscode.TreeDataProvider<Contributor> {
+  private _onDidChangeTreeData: vscode.EventEmitter<Contributor | undefined> = new vscode.EventEmitter<Contributor | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<Contributor | undefined> = this._onDidChangeTreeData.event;
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: Contributor): vscode.TreeItem {
+    return element;
+  }
+
+  async getChildren(element?: Contributor): Promise<Contributor[]> {
+    if (element || !vscode.workspace.workspaceFolders) {
+      return [];
+    }
+
+    const repo = await nodegit.Repository.open(vscode.workspace.workspaceFolders[0].uri.fsPath);
+    const commit = await repo.getHeadCommit();
+    const history = commit.history(nodegit.Revwalk.SORT.Time);
+    
+    return new Promise((resolve, reject) => {
+      const contributors = new Map<string, Contributor>();
+
+      history.on('commit', (commit) => {
+        const email = commit.author().email();
+        if (!contributors.has(email)) {
+          contributors.set(email, new Contributor(commit.author().name(), email));
+        }
+      });
+
+      history.on('end', () => resolve(Array.from(contributors.values())));
+      history.on('error', reject);
+      
+      history.start();
+    });
+  }
+}
 
 
 

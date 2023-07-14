@@ -294,7 +294,61 @@ class ContributorProvider implements vscode.TreeDataProvider<Contributor> {
   }
 }
 
+-------------------------------------
+  import * as vscode from 'vscode';
+import { commands, ExtensionContext, TreeItem, TreeDataProvider } from 'vscode';
 
+class Contributor extends TreeItem {
+  constructor(public readonly name: string, public readonly email: string, public readonly contributions: number) {
+    super(name, vscode.TreeItemCollapsibleState.None);
+    this.description = `${contributions} contributions`;
+    this.tooltip = `${this.name} <${this.email}> - ${contributions} contributions`;
+  }
+
+  iconPath = new vscode.ThemeIcon('account');
+}
+
+class ContributorProvider implements TreeDataProvider<Contributor> {
+  private _onDidChangeTreeData: vscode.EventEmitter<Contributor | undefined> = new vscode.EventEmitter<Contributor | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<Contributor | undefined> = this._onDidChangeTreeData.event;
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: Contributor): TreeItem {
+    return element;
+  }
+
+  async getChildren(element?: Contributor): Promise<Contributor[]> {
+    if (element || !vscode.workspace.workspaceFolders) {
+      return [];
+    }
+
+    const uri = vscode.workspace.workspaceFolders[0].uri;
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    const git = gitExtension?.exports.getAPI(1);
+
+    const repo = git?.repositories.find(repo => repo.rootUri.path === uri.path);
+    if (!repo) {
+      return [];
+    }
+
+    const result = await repo.exec('shortlog', ['-sne']);
+    const lines = result.stdout.trim().split('\n');
+    const contributors = lines.map(line => {
+      const match = line.trim().match(/^(\d+)\t(.*) <(.*)>$/);
+      if (match) {
+        const contributions = parseInt(match[1]);
+        const name = match[2];
+        const email = match[3];
+        return new Contributor(name, email, contributions);
+      }
+    }).filter(Boolean);
+
+    return contributors;
+  }
+}
 
 
 

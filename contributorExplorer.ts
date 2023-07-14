@@ -160,26 +160,37 @@ class ContributorsTreeDataProvider implements vscode.TreeDataProvider<Contributo
 
   private getContributors(): Thenable<Contributor[]> {
     return new Promise((resolve, reject) => {
-      cp.exec('git shortlog -sne --all', (err, stdout) => {
-        if (err) {
-          reject(err);
+        if(vscode.workspace.workspaceFolders) {
+            const rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+            cp.exec('git rev-parse --is-inside-work-tree', {cwd: rootPath}, (err, stdout) => {
+                if (err || stdout.trim() !== 'true') {
+                    reject(new Error('Not inside a Git work tree'));
+                } else {
+                    cp.exec('git shortlog -sne --all', {cwd: rootPath}, (err, stdout) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            const lines = stdout.trim().split('\n');
+                            const contributors = lines.map(line => {
+                                const match = line.match(/^(\d+)\s+(.*)\s<(.*)>$/);
+                                if (match) {
+                                    const [_, count, name, email] = match;
+                                    return new Contributor(name, Number(count), vscode.TreeItemCollapsibleState.None);
+                                } else {
+                                    return undefined;
+                                }
+                            }).filter(Boolean) as Contributor[];
+                            resolve(contributors);
+                        }
+                    });
+                }
+            });
         } else {
-          const lines = stdout.trim().split('\n');
-          const contributors = lines.map(line => {
-            const match = line.match(/^(\d+)\s+(.*)\s<(.*)>$/);
-            if (match) {
-              const [_, count, name, email] = match;
-              return new Contributor(name, Number(count), vscode.TreeItemCollapsibleState.None);
-            } else {
-              return undefined;
-            }
-          }).filter(Boolean) as Contributor[];
-          resolve(contributors);
+            reject(new Error('No workspace folder open'));
         }
-      });
     });
-  }
 }
+
 
 class Contributor extends vscode.TreeItem {
 

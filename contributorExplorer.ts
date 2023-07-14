@@ -195,3 +195,44 @@ class Contributor extends vscode.TreeItem {
   iconPath = new vscode.ThemeIcon('account');
 }
 
+export class ContributorExplorer extends BaseTreeExplorerView implements vscode.Disposable {
+  private _disposable: vscode.Disposable;
+  private _dataProvider: ContributorsTreeDataProvider;
+
+  constructor() {
+    super();
+
+    // Set up a new data provider.
+    this._dataProvider = new ContributorsTreeDataProvider();
+
+    // Register the TreeDataProvider for our view.
+    vscode.window.registerTreeDataProvider('contributorsView', this._dataProvider);
+
+    // Refresh command
+    const refreshCommand = vscode.commands.registerCommand('extension.refreshContributors', () => this._dataProvider.refresh());
+
+    // It is important to push the command into the extension context, otherwise it will be disposed of too early.
+    this._disposable = vscode.Disposable.from(refreshCommand);
+  }
+
+  getTreeItem(element: Contributor): vscode.TreeItem {
+    return this._dataProvider.getTreeItem(element);
+  }
+
+  getChildren(element?: Contributor): Thenable<Contributor[]> {
+    return this._dataProvider.getChildren(element);
+  }
+
+  dispose() {
+    // This will ensure that we clean up our command when the extension is deactivated.
+    this._disposable.dispose();
+  }
+}
+
+
+
+
+
+
+
+

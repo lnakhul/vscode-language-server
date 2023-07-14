@@ -121,3 +121,77 @@ export class ContributorDataProvider implements vscode.TreeDataProvider<Contribu
         this._onDidChangeTreeData.fire();
     }
 }
+
+------------------------------------
+  import * as vscode from 'vscode';
+import * as cp from 'child_process';
+
+export function activate(context: vscode.ExtensionContext) {
+
+  // Tree data provider
+  const provider = new ContributorsTreeDataProvider();
+  vscode.window.registerTreeDataProvider('contributorsView', provider);
+
+  // Refresh command
+  const refreshCommand = vscode.commands.registerCommand('extension.refreshContributors', () => provider.refresh());
+  context.subscriptions.push(refreshCommand);
+}
+
+class ContributorsTreeDataProvider implements vscode.TreeDataProvider<Contributor> {
+
+  private _onDidChangeTreeData: vscode.EventEmitter<Contributor | undefined | null | void> = new vscode.EventEmitter<Contributor | undefined | null | void>();
+  readonly onDidChangeTreeData: vscode.Event<Contributor | undefined | null | void> = this._onDidChangeTreeData.event;
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: Contributor): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(element?: Contributor): Thenable<Contributor[]> {
+    if (element) {
+      return Promise.resolve([]);
+    } else {
+      return this.getContributors();
+    }
+  }
+
+  private getContributors(): Thenable<Contributor[]> {
+    return new Promise((resolve, reject) => {
+      cp.exec('git shortlog -sne --all', (err, stdout) => {
+        if (err) {
+          reject(err);
+        } else {
+          const lines = stdout.trim().split('\n');
+          const contributors = lines.map(line => {
+            const match = line.match(/^(\d+)\s+(.*)\s<(.*)>$/);
+            if (match) {
+              const [_, count, name, email] = match;
+              return new Contributor(name, Number(count), vscode.TreeItemCollapsibleState.None);
+            } else {
+              return undefined;
+            }
+          }).filter(Boolean) as Contributor[];
+          resolve(contributors);
+        }
+      });
+    });
+  }
+}
+
+class Contributor extends vscode.TreeItem {
+
+  constructor(
+    public readonly label: string,
+    private count: number,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState
+  ) {
+    super(label, collapsibleState);
+    this.description = `${count} commit${count === 1 ? '' : 's'}`;
+  }
+
+  iconPath = new vscode.ThemeIcon('account');
+}
+

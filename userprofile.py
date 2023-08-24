@@ -127,3 +127,10 @@ class CustomProfileMagics(Magics):
         get_ipython().system_editor(config_file)
         print(f"Configuration file opened for profile '{profile_name}'.")
 
+
+
+// Modify the webview's CSP to allow loading of local resources
+    const csp = `default-src 'self' 'local'; img-src 'self' data:; media-src 'self' data:; script-src 'unsafe-inline' 'self' 'local'; style-src 'unsafe-inline' 'self' 'local';`;
+    const html = await fs.promises.readFile(htmlPath, 'utf8');
+    const updatedHtml = html.replace(/<head>/, `<head><meta http-equiv="Content-Security-Policy" content="${csp}">`);
+    await fs.promises.writeFile(htmlPath, updatedHtml);

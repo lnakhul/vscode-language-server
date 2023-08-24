@@ -134,3 +134,52 @@ class CustomProfileMagics(Magics):
     const html = await fs.promises.readFile(htmlPath, 'utf8');
     const updatedHtml = html.replace(/<head>/, `<head><meta http-equiv="Content-Security-Policy" content="${csp}">`);
     await fs.promises.writeFile(htmlPath, updatedHtml);
+
+    private async _requestHandler(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!req.url || req.url === '/app.js.map') return;
+    logger.info(`Received ${req.method} ${req.url} in local http server.`);
+    
+    const { headers, url } = req;
+    const parsedUrl = new URL(url, `http://${headers.host}`);
+    const { pathname, searchParams } = parsedUrl;
+    
+    // Try to deduce content type from pathname
+    let extension = path.extname(pathname).slice(1); // Remove the dot from the extension
+    let contentType: string | undefined;
+    switch(extension) {
+        case 'html':
+            contentType = 'text/html; charset=UTF-8';
+            break;
+        case 'js':
+            contentType = 'text/javascript; charset=UTF-8';
+            break;
+        case 'css':
+            contentType = 'text/css; charset=UTF-8';
+            break;
+        case 'png':
+            contentType = 'image/png';
+            break;
+        // Add more cases for other extensions if needed
+    }
+
+    if (!contentType) {
+        // Handle unknown content type or send a 404 error
+        return;
+    }
+
+    const fsPath = searchParams.get('fsPath') || pathname.slice(1);  // If there's no fsPath, try using the pathname
+    
+    try {
+        logger.info(`Providing content for ${fsPath} at ${filePath} endpoint.`);
+        const { stream } = await this.loadContent(fsPath, contentType);
+        res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+        stream.pipe(res);
+    } catch (error) {
+        logger.error(`Cannot find the content for file ${fsPath}.`);
+        const { stream, contentType: errorContentType } = this.createPageDoesNotExist(fsPath);
+        res.writeHead(404, { 'Content-Type': errorContentType, ...this.DEFAULT_HEADER });
+        stream.pipe(res);
+        return;
+    }
+}
+

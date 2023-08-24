@@ -183,3 +183,4 @@ class CustomProfileMagics(Magics):
     }
 }
 
+`<head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'local'; img-src 'self' data:; media-src 'self' data:; script-src 'unsafe-inline' 'self' 'local'; style-src 'unsafe-inline' 'self' 'local';">`

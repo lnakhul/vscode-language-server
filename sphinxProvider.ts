@@ -174,16 +174,18 @@ private async _requestHandler(req: http.IncomingMessage, res: http.ServerRespons
         const ext = path.extname(fsPath);
         const contentType = this.getContentType(ext);
 
-        if (await fs.promises.access(fsPath, fs.constants.F_OK)) {
-            const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath));
-            const decoded = new TextDecoder('utf-8').decode(fileContents);
-            const stream = Stream.Readable.from(decoded);
-
-            res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
-            stream.pipe(res);
-        } else {
+        try {
+            await fs.promises.access(fsPath, fs.constants.F_OK);
+        } catch (error) {
             throw new Error('File not found');
         }
+
+        const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath));
+        const decoded = new TextDecoder('utf-8').decode(fileContents);
+        const stream = Stream.Readable.from(decoded);
+
+        res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+        stream.pipe(res);
     } catch (error) {
         logger.error(`Cannot find the content for file ${fsPath}`);
         res.writeHead(404, { 'Content-Type': 'text/html; charset=UTF-8', ...this.DEFAULT_HEADER });
@@ -191,4 +193,5 @@ private async _requestHandler(req: http.IncomingMessage, res: http.ServerRespons
         res.end();
     }
 }
+
 

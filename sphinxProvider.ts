@@ -76,3 +76,47 @@ private async showInWebView(filePath: string): Promise<void> {
         `;
     }
 }
+
+--------------------------------------------------------------------
+
+getContentType(extension: string): string {
+    const types: { [key: string]: string } = {
+        '.html': 'text/html; charset=UTF-8',
+        '.js': 'text/javascript; charset=UTF-8',
+        '.css': 'text/css; charset=UTF-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.gif': 'image/gif',
+        // Add more as needed
+    };
+
+    return types[extension] || 'application/octet-stream';
+}
+
+private async _requestHandler(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!req.url) return;
+    logger.info(`Received ${req.method} ${req.url} in local http server.`);
+    const { headers, url } = req;
+    const parsedUrl = new URL(url, `http://${headers.host}`);
+    const { pathname, searchParams } = parsedUrl;
+    const fsPath = searchParams.get('fsPath') || path.join(DOC_ROOT, pathname);  // If no fsPath param, assume the pathname is a relative path from the DOC_ROOT
+
+    try {
+        logger.info(`Providing content for ${fsPath}.`);
+        const ext = path.extname(fsPath);
+        const contentType = this.getContentType(ext);
+        const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath));
+        const decoded = new TextDecoder('utf-8').decode(fileContents);
+        const stream = Stream.Readable.from(decoded);
+
+        res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+        stream.pipe(res);
+    } catch (error) {
+        logger.error(`Cannot find the content for file ${fsPath}.`);
+        const { stream, contentType } = this.createPageDoesNotExist(fsPath);
+        res.writeHead(404, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+        stream.pipe(res);
+        return;
+    }
+}
+

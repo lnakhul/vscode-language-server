@@ -120,3 +120,36 @@ private async _requestHandler(req: http.IncomingMessage, res: http.ServerRespons
     }
 }
 
+----------------------------------------------
+
+// ... [other imports]
+import * as path from 'path';
+import * as os from 'os';
+
+// ... [rest of the code]
+
+private async showInWebView(filePath: string): Promise<void> {
+    const content = await fetchLocalFile(filePath);
+    const htmlPath = path.normalize(path.join(path.dirname(filePath), 'index.html'));
+    await fs.promises.writeFile(htmlPath, content);
+    
+    const webviewPanel = this.reactView.openLocalHtml(htmlPath, {
+        title: 'Sphinx Documentation', 
+        identifier: 'sphinx',
+        localResourceRoots: [vscode.Uri.file(path.dirname(filePath))]
+    });
+    const panel = await webviewPanel;
+
+    if (panel) {
+        // Handling both single and double quotes in the regex
+        const updatedHtmlContent = content.replace(/(href|src)=["']?(?!https?:\/\/)(?!data:)(?!#)([^"']*)["']?/g, (match, prefix, originalPath) => {
+            // Convert the paths using asWebviewUri for the WebView to correctly load local resources
+            const absolutePath = path.normalize(path.join(path.dirname(filePath), originalPath));
+            const webViewUri = panel.webview.asWebviewUri(vscode.Uri.file(absolutePath));
+            return `${prefix}="${webViewUri}"`;
+        });
+        panel.webview.html = updatedHtmlContent;
+    }
+}
+
+

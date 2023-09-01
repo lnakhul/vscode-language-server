@@ -194,4 +194,65 @@ private async _requestHandler(req: http.IncomingMessage, res: http.ServerRespons
     }
 }
 
+--------------------------------------
+    private async _requestHandler(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (!req.url) return;
+
+    logger.info(`Received ${req.method} ${req.url} in local http server.`);
+    const { headers, url } = req;
+    const parsedUrl = new URL(url, `http://${headers.host}`);
+    const { searchParams } = parsedUrl;
+    const fsPath = searchParams.get('fsPath');
+
+    if (!fsPath) {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=UTF-8', ...this.DEFAULT_HEADER });
+        res.write(this.createPageDoesNotExist('Unknown').stream.read());
+        res.end();
+        return;
+    }
+
+    try {
+        const assetPath = parsedUrl.pathname;
+        
+        if (assetPath === '/html') {
+            // This URL is for an HTML page, not an asset
+            const completePath = fsPath;
+            const ext = path.extname(completePath);
+            const contentType = this.getContentType(ext);
+            
+            if (await fs.promises.access(completePath, fs.constants.F_OK)) {
+                const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(completePath));
+                const decoded = new TextDecoder('utf-8').decode(fileContents);
+                const stream = Stream.Readable.from(decoded);
+
+                res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+                stream.pipe(res);
+            } else {
+                throw new Error('File not found');
+            }
+
+        } else {
+            // Assuming this is a URL for an asset
+            const completePath = path.join(fsPath, assetPath);
+            const ext = path.extname(completePath);
+            const contentType = this.getContentType(ext);
+
+            if (await fs.promises.access(completePath, fs.constants.F_OK)) {
+                const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(completePath));
+                const decoded = new TextDecoder('utf-8').decode(fileContents);
+                const stream = Stream.Readable.from(decoded);
+
+                res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+                stream.pipe(res);
+            } else {
+                throw new Error('File not found');
+            }
+        }
+    } catch (error) {
+        logger.error(`Cannot find the content for file ${fsPath}`);
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=UTF-8', ...this.DEFAULT_HEADER });
+        res.write(this.createPageDoesNotExist(fsPath).stream.read());
+        res.end();
+    }
+}
 

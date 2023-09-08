@@ -256,3 +256,70 @@ private async _requestHandler(req: http.IncomingMessage, res: http.ServerRespons
     }
 }
 
+
+-----------------------------------------
+
+private async _requestHandler(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!req.url) return;
+  if (req.url.startsWith('/_static')) {
+    this._sphinxHandler(new URL(req.url, `http://${req.headers.host}`), res, req.url);
+    return;
+  }
+  console.log('Received request for URL:', req.url);
+  if (!req.url || req.url === '/app.js.map') return;
+  logger.info(`Received ${req.method} ${req.url} in local http server.`);
+  console.log('Request Url: ', req.url);
+  const { headers, url } = req;
+  const parsedUrl = new URL(url, `http://${headers.host}`);
+  const { pathname, searchParams } = parsedUrl;
+  const path = pathname.split('/')[1];
+  const contentProvider = this.contentProviders.get(path);
+  const fsPath = searchParams.get('fsPath');
+  if (!contentProvider || !fsPath) return;
+  if (pathname.startsWith('/html')) {
+    this._sphinxHandler(parsedUrl, res, fsPath);
+    return;
+  }
+  try {
+    logger.info(`Providing content for ${fsPath} at ${path} endpoint.`);
+    const { stream, contentType } = await contentProvider(fsPath);
+    res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+    stream.pipe(res);
+    console.log('RequestUrl: ', req.url);
+  } catch (error) {
+    logger.error(`Cannot find the content for file ${fsPath}.`);
+    const { stream, contentType } = this.createPageDoesNotExist(fsPath);
+    res.writeHead(404, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+    stream.pipe(res);
+    return;
+  }
+}
+
+private _sphinxHandler(parsedUrl: URL, res: http.ServerResponse, sphinxRoot: string): void {
+  console.log('SphinxRootFile: ', sphinxRoot);
+  let docPath = parsedUrl.pathname.replace('/html', '');
+  console.log('DocPath: ', docPath);
+  if (!docPath || docPath === '/') {
+    docPath = '/index.html';
+  }
+  const fullPath = path.join(path.dirname(sphinxRoot), docPath);
+  console.log('Full Path: ', fullPath);
+  if (fs.existsSync(fullPath)) {
+    const ext = path.extname(fullPath);
+    const contentType = this.getContentType(ext);
+    res.writeHead(200, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    const updatedContent = content.replace(/(href|src)="(?!https?:\/\/)(?!data:)(?!#)([^"]*)"/g, (match, prefix, originalPath) => {
+      // Convert the paths using asWebviewUri for the WebView to correctly load local resources
+      const absolutePath = path.join(path.dirname(fullPath), originalPath);
+      const webViewUri = vscode.Uri.file(absolutePath).with({ scheme: 'vscode-resource' });
+      return `${prefix}="${webViewUri}"`;
+    });
+    res.write(updatedContent);
+    res.end();
+  } else {
+    const { stream, contentType } = this.createPageDoesNotExist(fullPath);
+    res.writeHead(404, { 'Content-Type': contentType, ...this.DEFAULT_HEADER });
+    stream.pipe(res);
+  }
+}

@@ -323,3 +323,28 @@ private _sphinxHandler(parsedUrl: URL, res: http.ServerResponse, sphinxRoot: str
     stream.pipe(res);
   }
 }
+
+------------------------------------
+
+private async showInWebView(filePath: string): Promise<void> {
+  const content = await fetchLocalFile(filePath);
+  const htmlPath = path.join(path.dirname(filePath), 'index.html');
+  await fs.promises.writeFile(htmlPath, content);
+
+  const webviewPanel = this.reactView.openLocalHtml(htmlPath, {
+    title: 'Sphinx Documentation',
+    identifier: 'sphinx',
+    localResourceRoots: [vscode.Uri.file(path.dirname(filePath))]
+  });
+  const panel = await webviewPanel;
+
+  if (panel) {
+    const updatedHtmlContent = content.replace(/(href|src)="(?!https?:\/\/)(?!data:)(?!#)([^"]*)"/g, (match, prefix, originalPath) => {
+      // Convert the paths using asWebviewUri for the WebView to correctly load local resources
+      const absolutePath = path.join(path.dirname(filePath), originalPath);
+      const webViewUri = panel.webview.asWebviewUri(vscode.Uri.file(absolutePath));
+      return `${prefix}="${webViewUri}"`;
+    });
+    panel.webview.html = updatedHtmlContent;
+  }
+}

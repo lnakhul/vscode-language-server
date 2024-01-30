@@ -36,3 +36,9 @@ const groupedResults = testResults.reduce((acc, result) => {
         ))}
       </div>
     )
+            }
+
+            function isTestEventResult(data: any): data is TestEventResult {
+    return data && typeof data.success === 'boolean' && typeof data.testModule === 'string' && 
+           typeof data.className === 'string' && typeof data.methodName === 'string';
+}

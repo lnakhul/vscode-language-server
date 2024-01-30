@@ -1,44 +1,51 @@
-const groupedResults = testResults.reduce((acc, result) => {
-        if (!acc[result.testModule]) {
-          acc[result.testModule] = {};
-        }
-        if (!acc[result.testModule][result.className]) {
-          acc[result.testModule][result.className] = {};
-        }
-        if (!acc[result.testModule][result.className][result.label]) {
-          acc[result.testModule][result.className][result.label] = [];
-        }
-        acc[result.testModule][result.className][result.label].push(result);
-        return acc;
-      }, {});
-
- function TestResultsComponent({ data }) {
-    if (!data) {
-      return null;
-    }
-  
-    if (data instanceof TestEventResult) {
-      return (
-        <div>
-          {data.methodName}: {data.success ? "Passed" : "Failed"}
-          {/* Render other details from TestEventResult as needed */}
-        </div>
-      );
-    }
-  
+const TestModuleComponent = ({ moduleName, classes }) => {
     return (
       <div>
-        {Object.keys(data).map(key => (
-          <div key={key}>
-            <strong>{key}</strong>
-            <TestResultsComponent data={data[key]} />
-          </div>
+        <h2>{moduleName}</h2>
+        {Object.entries(classes).map(([className, methods]) => (
+          <TestClassComponent key={className} className={className} methods={methods} />
         ))}
       </div>
-    )
-            }
-
-            function isTestEventResult(data: any): data is TestEventResult {
-    return data && typeof data.success === 'boolean' && typeof data.testModule === 'string' && 
-           typeof data.className === 'string' && typeof data.methodName === 'string';
-}
+    );
+  };
+  
+  const TestClassComponent = ({ className, methods }) => {
+    return (
+      <div>
+        <h3>{className}</h3>
+        {Object.entries(methods).map(([methodName, result]) => (
+          <TestMethodComponent key={methodName} methodName={methodName} result={result} />
+        ))}
+      </div>
+    );
+  };
+  
+  const TestMethodComponent = ({ methodName, result }) => {
+    return (
+      <div className={result.success ? 'success' : 'failure'}>
+        <span>{methodName}</span>
+        <span>{result.formattedDuration}</span>
+      </div>
+    );
+  };
+  
+  function groupTestResults(testResults) {
+    const groupedResults = {};
+  
+    testResults.forEach(result => {
+      const { testModule, className, methodName } = result;
+  
+      if (!groupedResults[testModule]) {
+        groupedResults[testModule] = {};
+      }
+  
+      if (!groupedResults[testModule][className]) {
+        groupedResults[testModule][className] = {};
+      }
+  
+      // Assuming methodName is unique per class, or you could append results if not
+      groupedResults[testModule][className][methodName] = result;
+    });
+  
+    return groupedResults;
+  }

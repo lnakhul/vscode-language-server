@@ -80,3 +80,33 @@ function groupTestResults(testResultsMap: Map<string, Map<string, TestEventResul
             }));
             return { moduleName, results };
         });
+
+
+function groupTestResultsFromMap(testResultsMap: Map<string, Map<string, TestEventResult[]>>): GroupedTestResults {
+  const grouped: GroupedTestResults = {};
+
+  testResultsMap.forEach((classMap, moduleName) => {
+    if (!grouped[moduleName]) {
+      grouped[moduleName] = { classes: {}, success: true };
+    }
+
+    classMap.forEach((results, className) => {
+      if (!grouped[moduleName].classes[className]) {
+        grouped[moduleName].classes[className] = { methods: {}, success: true };
+      }
+
+      results.forEach(result => {
+        const { methodName } = result;
+        grouped[moduleName].classes[className].methods[methodName] = result;
+
+        // If any method fails, mark the class and module as failed
+        if (!result.success) {
+          grouped[moduleName].success = false;
+          grouped[moduleName].classes[className].success = false;
+        }
+      });
+    });
+  });
+
+  return grouped;
+}

@@ -110,3 +110,30 @@ function groupTestResultsFromMap(testResultsMap: Map<string, Map<string, TestEve
 
   return grouped;
 }
+
+
+
+function groupTestResults(testResultsMap: Map<string, TestEventResult[]>): GroupedTestResults {
+    const grouped: GroupedTestResults = {};
+  
+    testResultsMap.forEach((testResults, testModule) => {
+      testResults.forEach(result => {
+        const { className, methodName } = result;
+        if (!grouped[testModule]) {
+          grouped[testModule] = { classes: {}, success: true }; 
+        }
+        if (!grouped[testModule].classes[className]) {
+          grouped[testModule].classes[className] = { methods: {}, success: true }; 
+        }
+        grouped[testModule].classes[className].methods[methodName] = result;
+  
+        // If any method fails, mark the class and module as failed
+        if (!result.success) {
+          grouped[testModule].success = false;
+          grouped[testModule].classes[className].success = false;
+        }
+      });
+    });
+  
+    return grouped;
+  }

@@ -137,3 +137,36 @@ function groupTestResults(testResultsMap: Map<string, TestEventResult[]>): Group
   
     return grouped;
   }
+
+
+        function structureTestResults(testResults) {
+  const structuredResults = new Map();
+
+  testResults.forEach(result => {
+    const { testModule, className, methodName } = result;
+
+    // Ensure the module exists in the structure
+    if (!structuredResults.has(testModule)) {
+      structuredResults.set(testModule, new Map());
+    }
+
+    const classesMap = structuredResults.get(testModule);
+
+    // Ensure the class exists in the module
+    if (!classesMap.has(className)) {
+      classesMap.set(className, new Map());
+    }
+
+    const methodsMap = classesMap.get(className);
+
+    // Assuming multiple results per method are possible, use an array
+    if (!methodsMap.has(methodName)) {
+      methodsMap.set(methodName, []);
+    }
+
+    methodsMap.get(methodName).push(result);
+  });
+
+  return structuredResults;
+}
+

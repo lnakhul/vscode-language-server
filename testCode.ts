@@ -49,3 +49,23 @@ const TestModuleComponent = ({ moduleName, classes }) => {
   
     return groupedResults;
   }
+
+function groupTestResults(testResultsMap: Map<string, Map<string, TestEventResult[]>>): GroupedTestResults {
+    const grouped: GroupedTestResults = {};
+  
+    for (const [testModule, classes] of testResultsMap.entries()) {
+      grouped[testModule] = { classes: {}, success: true };
+      for (const [className, methods] of classes.entries()) {
+        grouped[testModule].classes[className] = { methods: {}, success: true };
+        for (const method of methods) {
+          grouped[testModule].classes[className].methods[method.methodName] = method;
+          if (!method.success) {
+            grouped[testModule].success = false;
+            grouped[testModule].classes[className].success = false;
+          }
+        }
+      }
+    }
+  
+    return grouped;
+  }

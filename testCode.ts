@@ -69,3 +69,14 @@ function groupTestResults(testResultsMap: Map<string, Map<string, TestEventResul
   
     return grouped;
   }
+
+    {
+        // Transform your testResults Map here
+        const testResultsMap = this.testResults.get(currentReviewId) ?? new Map();
+        const testResultsArray = Array.from(testResultsMap).map(([moduleName, testModuleMap]) => {
+            const results = Array.from(testModuleMap).map(([className, testDetails]) => ({
+                className,
+                testDetails
+            }));
+            return { moduleName, results };
+        });

@@ -193,3 +193,31 @@ function groupTestResults(testResultsMap: Map<string, TestEventResult[]>): Group
     });
     return grouped;
 }
+
+function groupTestResults(testResultsMap: Map<string, TestEventResult[]>): GroupedTestResults {
+  const grouped: GroupedTestResults = {};
+
+  testResultsMap.forEach((results, moduleName) => {
+    results.forEach(result => {
+      const { className, methodName } = result;
+      
+      if (!grouped[moduleName]) {
+        grouped[moduleName] = { classes: {}, success: true };
+      }
+
+      const module = grouped[moduleName];
+      if (!module.classes[className]) {
+        module.classes[className] = { methods: {}, success: true };
+      }
+
+      const classObj = module.classes[className];
+      classObj.methods[methodName] = result;
+
+      // Update success flags based on test results
+      classObj.success = classObj.success && result.success;
+      module.success = module.success && classObj.success;
+    });
+  });
+
+  return grouped;
+}

@@ -71,3 +71,20 @@ if (fileStat.isFile()) {
                         logFiles.push(filePath);
                     }
                 }
+
+
+private async getRecentLogs(): Promise<string[]> {
+    const logFiles: string[] = [];
+    const tempDir = os.tmpdir();
+    const quartzDir = path.join(tempDir, 'quartz');
+    const vscodeFiles = await util.promisify(fs.readdir)(quartzDir);
+    const filteredFiles = vscodeFiles.filter(file => file.startsWith('vscode_')).sort().reverse().slice(0, 5);
+    for (const file of filteredFiles) {
+        const filePath = path.join(quartzDir, file);
+        const fileStat = await util.promisify(fs.stat)(filePath);
+        if (fileStat.isFile()) {
+            logFiles.push(filePath);
+        }
+    }
+    return logFiles;
+}

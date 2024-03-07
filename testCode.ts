@@ -30,3 +30,17 @@
         }
         return logFiles;
     }
+
+
+  private getRecentDays(): string[] {
+        const recentDays: string[] = [];
+        const today = new Date();
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            recentDays.push(`${month}/${day}/${date.getFullYear()}`);
+        }
+        return recentDays;
+    }

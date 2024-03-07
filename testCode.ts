@@ -57,3 +57,17 @@ private getRecentDays(): string[] {
     }
     return recentDays;
 }
+
+
+if (fileStat.isFile()) {
+                    // Convert the file's birthtime to YYYY-MM-DD format
+                    const birthTime = fileStat.birthtime;
+                    const month = (birthTime.getMonth() + 1).toString().padStart(2, '0');
+                    const day = birthTime.getDate().toString().padStart(2, '0');
+                    const birthDate = `${birthTime.getFullYear()}-${month}-${day}`;
+    
+                    // Check if the birthdate is in the last 7 days
+                    if (recentDays.includes(birthDate)) {
+                        logFiles.push(filePath);
+                    }
+                }

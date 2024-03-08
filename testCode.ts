@@ -129,3 +129,20 @@ private async retrieveAndSendLogsEmail(): Promise<void> {
         }
     }
 
+
+def handle_retrieveLogs(self, ctx) -> List[Dict]:
+    """Retrieves all logs stored in Sandra"""
+    try:
+        logs_info = []
+        for file_path in sandra.walk(self.logSourceDir, db=self.db, returnDirs=False):
+            log_obj = self.db.read("Container", file_path)
+            log_info = {
+                "fileName": os.path.basename(file_path),
+                "logContent": log_obj.contents.get('logContent', ''),
+                "url": self.generate_url(file_path)
+            }
+            logs_info.append(log_info)
+        return logs_info
+    except Exception as e:
+        logger.error(f"Failed to retrieve logs: {e}")
+        return []

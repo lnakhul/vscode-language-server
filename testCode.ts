@@ -88,3 +88,44 @@ private async getRecentLogs(): Promise<string[]> {
     }
     return logFiles;
 }
+
+def retrieve_logs(self) -> List[Dict]:
+        """Retrieves all logs from Sandra and returns their information."""
+        try:
+            logs_container = self.db.read_or_new("Container", self.logSourceDir)
+            logs_info = []
+            for log_obj in logs_container.contents.get('containers', []):
+                log_info = {
+                    "fileName": log_obj['name'],
+                    "url": self.generate_url(log_obj['name'])
+                }
+                logs_info.append(log_info)
+            return logs_info
+        except Exception as e:
+            logger.error(f"Failed to retrieve logs: {e}")
+            return []
+
+private async retrieveAndSendLogsEmail(): Promise<void> {
+        try {
+            // Call the Python method to retrieve logs
+            const logsInfo: LogFileContent[] = await this.proxyManager.sendRequest('log:retrieveLogs');
+            if (logsInfo.length === 0) {
+                vscode.window.showInformationMessage('No logs to send.');
+                return;
+            }
+
+            // Generate email body with links to open logs in VSCode
+            const logLinks = logsInfo.map(log => `[${log.fileName}](${log.url})`).join('\n');
+            const emailBody = `Logs are available for review:\n\n${logLinks}`;
+
+            // Open default email client with pre-filled subject and body
+            const mailtoLink = `mailto:?subject=Logs from VSCode&body=${encodeURIComponent(emailBody)}`;
+            vscode.env.openExternal(vscode.Uri.parse(mailtoLink));
+
+            vscode.window.showInformationMessage('Email prepared with logs.');
+        } catch (error) {
+            Logger.error(`Failed to send logs email: ${error}`);
+            vscode.window.showErrorMessage('Failed to prepare email with logs.');
+        }
+    }
+

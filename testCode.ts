@@ -167,3 +167,15 @@ private async openLogHandler(uri: vscode.Uri) {
         logEditor.title = logFileName;
         logEditor.description = logUriStr;
     }
+
+private async openLogHandler(uri: vscode.Uri) {
+    const { query } = uri;
+    const params = querystring.parse(query);
+    if (params.path) {
+        const logUri = vscode.Uri.parse(`vscode://${GlobalUriHandler.extensionName}/${params.path as string}`);
+        const doc = await vscode.workspace.openTextDocument(logUri);
+        await vscode.window.showTextDocument(doc);
+    } else {
+        vscode.window.showErrorMessage('Invalid URI. The "path" parameter is missing.');
+    }
+}

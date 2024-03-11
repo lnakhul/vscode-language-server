@@ -146,3 +146,24 @@ def handle_retrieveLogs(self, ctx) -> List[Dict]:
     except Exception as e:
         logger.error(f"Failed to retrieve logs: {e}")
         return []
+
+
+private async openLogHandler(uri: vscode.Uri) {
+        const logFile = uri.query;
+        if (!logFile) {
+            vscode.window.showErrorMessage('No log file found.');
+            return;
+        }
+        const logUri = vscode.Uri.parse(logFile);
+        const logContent = await this.proxyManager.sendRequest<string>('retrieveLog', logUri.toString());
+        if (!logContent) {
+            vscode.window.showErrorMessage('Failed to retrieve log content.');
+            return;
+        }
+        const logFileName = path.basename(logFile);
+        const logUriStr = GlobalUriHandler.asUrl('logs', { path: logFile }).toString();
+        const logDoc = await vscode.workspace.openTextDocument({ language: 'log', content: logContent });
+        const logEditor = await vscode.window.showTextDocument(logDoc, { viewColumn: vscode.ViewColumn.Beside });
+        logEditor.title = logFileName;
+        logEditor.description = logUriStr;
+    }

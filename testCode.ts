@@ -179,3 +179,23 @@ private async openLogHandler(uri: vscode.Uri) {
         vscode.window.showErrorMessage('Invalid URI. The "path" parameter is missing.');
     }
 }
+
+private async openLogHandler(uri?: vscode.Uri) {
+    if (!uri) {
+        const input = await vscode.window.showInputBox({ prompt: 'Enter the URI to open' });
+        if (input) {
+            uri = vscode.Uri.parse(input);
+        } else {
+            return;
+        }
+    }
+
+    const { query } = uri;
+    const params = querystring.parse(query);
+    if (params.path) {
+        const logUri = vscode.Uri.parse(`vscode://${GlobalUriHandler.extensionName}/${params.path as string}`);
+        await vscode.env.openExternal(logUri);
+    } else {
+        vscode.window.showErrorMessage('Invalid URI. The "path" parameter is missing.');
+    }
+}

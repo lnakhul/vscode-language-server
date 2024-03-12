@@ -235,3 +235,40 @@ ${logLinks}
         vscode.window.showErrorMessage('Failed to prepare email with logs.');
     }
 }
+
+def getVSCodeLogHtmlCode(log_url):
+    """
+    Generate a hyperlink that opens a log file in VS Code.
+
+    :param log_url: The URL of the log file.
+    :return: An HTML string that represents a hyperlink.
+    """
+    vscode_url = f"vscode://quartz/logs?path={log_url}"
+    return f'<a href="{vscode_url}">{log_url}</a>'
+
+private async retrieveAndSendLogsEmail(): Promise<void> {
+    try {
+        // Call the Python method to retrieve logs
+        const logsInfo: LogFileContent[] = await this.proxyManager.sendRequest<LogFileContent[]>('retrieveLogs');
+        if (logsInfo.length === 0) {
+            vscode.window.showInformationMessage('No logs to send.');
+            return;
+        }
+
+        // Generate email body with links to open logs in VSCode
+        const logLinks = logsInfo.map(log => {
+            const logUri = getVSCodeLogHtmlCode(log.url);
+            return logUri;
+        }).join('<br>');
+        const emailBody = `Logs are available for review. Please click on the following links to open them in VS Code:<br><br>${logLinks}`;
+
+        // Open default email client with pre-filled subject and body
+        const mailtoLink = `mailto:?subject=Logs from VSCode&body=${encodeURIComponent(emailBody)}`;
+        vscode.env.openExternal(vscode.Uri.parse(mailtoLink));
+
+        vscode.window.showInformationMessage('Email prepared with logs.');
+    } catch (error) {
+        Logger.error(`Failed to send logs email: ${error}`);
+        vscode.window.showErrorMessage('Failed to prepare email with logs.');
+    }
+}

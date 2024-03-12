@@ -199,3 +199,39 @@ private async openLogHandler(uri?: vscode.Uri) {
         vscode.window.showErrorMessage('Invalid URI. The "path" parameter is missing.');
     }
 }
+
+private async retrieveAndSendLogsEmail(): Promise<void> {
+    try {
+        // Call the Python method to retrieve logs
+        const logsInfo: LogFileContent[] = await this.proxyManager.sendRequest<LogFileContent[]>('retrieveLogs');
+        if (logsInfo.length === 0) {
+            vscode.window.showInformationMessage('No logs to send.');
+            return;
+        }
+
+        // Generate HTML page with links to open logs in VSCode
+        const logLinks = logsInfo.map(log => {
+            const logUri = GlobalUriHandler.asUrl('logs', { path: log.url });
+            return `<a href="${logUri.toString()}">${logUri.toString()}</a>`;
+        }).join('<br>');
+        const htmlContent = `<!DOCTYPE html>
+<html>
+<body>
+<p>Logs are available for review. Please click on the following links to open them in VS Code:</p>
+${logLinks}
+</body>
+</html>`;
+        const htmlFilePath = path.join(os.tmpdir(), 'logs.html');
+        await fs.promises.writeFile(htmlFilePath, htmlContent);
+
+        // Open default email client with pre-filled subject and body
+        const emailBody = `Logs are available for review. Please visit the following page to view them: file://${htmlFilePath}`;
+        const mailtoLink = `mailto:?subject=Logs from VSCode&body=${encodeURIComponent(emailBody)}`;
+        vscode.env.openExternal(vscode.Uri.parse(mailtoLink));
+
+        vscode.window.showInformationMessage('Email prepared with logs.');
+    } catch (error) {
+        Logger.error(`Failed to send logs email: ${error}`);
+        vscode.window.showErrorMessage('Failed to prepare email with logs.');
+    }
+}

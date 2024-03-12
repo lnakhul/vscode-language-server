@@ -272,3 +272,59 @@ private async retrieveAndSendLogsEmail(): Promise<void> {
         vscode.window.showErrorMessage('Failed to prepare email with logs.');
     }
 }
+
+
+import qz.lib.mail
+
+def postLogNotificationEmail(self, logFiles, requestedBy, additionalNotifyees=[]):
+    """
+    Send an email with links to log files.
+
+    :param logFiles: A list of dictionaries with 'fileName', 'logContent', and 'url' keys.
+    :param requestedBy: A string represents the original requester.
+    :param additionalNotifyees: A list of additional notifyees with usernames.
+    """
+    if not logFiles:
+        logger.info("No log files to send.")
+        return
+
+    usernames = list(set([requestedBy] + (additionalNotifyees or [])))
+    emails = [email for email in (lookupEmailAddress(u) for u in usernames if u) if email]
+
+    # Generate HTML links for each log file
+    logLinks = ''.join([f'<a href="{log["url"]}">{log["fileName"]}</a><br>' for log in logFiles])
+    html = f"<html><body><p>Log files are available for review:</p>{logLinks}</body></html>"
+
+    subject = "Log Files Notification"
+
+    if emails:
+        try:
+            logger.info(f"Sending log notification email to {', '.join(emails)}")
+            qz.lib.mail.sendmail(
+                sender=lookupEmailAddress(requestedBy),
+                addrs=emails,
+                subject=subject,
+                body=html,
+                format='html')
+        except Exception as e:
+            logger.error(f"Email notification failure: {repr(e)}", exc_info=True)
+            return None
+
+private async retrieveAndSendLogsEmail(): Promise<void> {
+    try {
+        // Assume logsInfo already contains the necessary log file information
+        const logsInfo: LogFileContent[] = await this.proxyManager.sendRequest<LogFileContent[]>('retrieveLogs');
+        if (logsInfo.length === 0) {
+            vscode.window.showInformationMessage('No logs to send.');
+            return;
+        }
+
+        // Call the Python service to send the email
+        // This assumes you have a mechanism to call Python functions from TypeScript
+        await this.proxyManager.sendRequest('postLogNotificationEmail', logsInfo, 'requestedByEmail', ['additionalNotifyee1', 'additionalNotifyee2']);
+        vscode.window.showInformationMessage('Email with log file links sent.');
+    } catch (error) {
+        Logger.error(`Failed to send logs email: ${error}`);
+        vscode.window.showErrorMessage('Failed to send email with log file links.');
+    }
+}

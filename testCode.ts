@@ -328,3 +328,104 @@ private async retrieveAndSendLogsEmail(): Promise<void> {
         vscode.window.showErrorMessage('Failed to send email with log file links.');
     }
 }
+
+
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as zlib from 'zlib';
+import * as util from 'util';
+import { LogHelper } from './logHelper';
+import { ProxyManager } from './proxyManager';
+import { SourceCache } from './sourceCache';
+
+jest.mock('vscode');
+jest.mock('fs');
+jest.mock('os');
+jest.mock('path');
+jest.mock('zlib');
+jest.mock('util');
+jest.mock('./proxyManager');
+jest.mock('./sourceCache');
+
+describe('LogHelper', () => {
+    let logHelper: LogHelper;
+    let proxyManager: ProxyManager;
+    let sourceCache: SourceCache;
+
+    beforeEach(() => {
+        proxyManager = new ProxyManager();
+        sourceCache = new SourceCache();
+        logHelper = new LogHelper(proxyManager, sourceCache);
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('should handle URI', async () => {
+        // Mock methods
+        vscode.Uri.parse = jest.fn().mockReturnValue({ scheme: 'quartz-extension-log', query: 'path=test' });
+        vscode.workspace.openTextDocument = jest.fn().mockResolvedValue({});
+        vscode.window.showTextDocument = jest.fn().mockResolvedValue({});
+        proxyManager.sendRequest = jest.fn().mockResolvedValue([{ url: 'test', logContent: 'content' }]);
+
+        await logHelper.handleUri(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+
+        expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
+        expect(vscode.window.showTextDocument).toHaveBeenCalled();
+    });
+
+    it('should provide text document content', async () => {
+        const content = await logHelper.provideTextDocumentContent(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+        expect(content).toBeUndefined();
+    });
+
+    it('should open log handler', async () => {
+        vscode.window.showInputBox = jest.fn().mockResolvedValue('quartz-extension-log://authority/path?path=test');
+        vscode.env.openExternal = jest.fn().mockResolvedValue(undefined);
+
+        await logHelper.openLogHandler();
+
+        expect(vscode.env.openExternal).toHaveBeenCalled();
+    });
+
+    it('should send logs handler', async () => {
+        logHelper.getRecentLogs = jest.fn().mockResolvedValue(['test']);
+        logHelper.uploadLogsToSandra = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+        logHelper.retrieveAndSendLogsEmail = jest.fn().mockResolvedValue(undefined);
+        vscode.window.showInformationMessage = jest.fn().mockResolvedValue(undefined);
+
+        await logHelper.sendLogsHandler();
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Log files uploaded successfully.');
+    });
+
+    it('should get recent logs', async () => {
+        os.tmpdir = jest.fn().mockReturnValue('/tmp');
+        util.promisify = jest.fn().mockImplementation(() => () => Promise.resolve(['vscode_test']));
+        fs.stat = jest.fn().mockResolvedValue({ isFile: () => true, birthtime: new Date() });
+
+        const logs = await logHelper.getRecentLogs();
+
+        expect(logs).toEqual(['/tmp/quartz/vscode_test']);
+    });
+
+    it('should upload logs to Sandra', async () => {
+        util.promisify = jest.fn().mockImplementation(() => () => Promise.resolve(Buffer.from('test')));
+        proxyManager.sendRequest = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+
+        const logs = await logHelper.uploadLogsToSandra(['test']);
+
+        expect(logs).toEqual([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+    });
+
+    it('should retrieve and send logs email', async () => {
+        proxyManager.sendRequest = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+
+        await logHelper.retrieveAndSendLogsEmail();
+
+        expect(proxyManager.sendRequest).toHaveBeenCalledTimes(2);
+    });
+});

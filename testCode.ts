@@ -31,6 +31,156 @@
         return logFiles;
     }
 
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as util from 'util';
+import { LogHelper } from '../logHelper';
+import { MockProxyManager } from '../mocks/proxyManager';
+import { SourceCache } from './sourceCache';
+import { mock } from 'jest-mock-extended';
+import { expect, test } from '@jest/globals';
+import { MockInstanceStore } from '../utils';
+import { container, cleanupTestContainer, prepareTestContainers } from '../testDi';
+
+jest.mock("../../logging");
+
+jest.mock('vscode', () => ({
+    commands : {
+       registerCommand: jest.fn(),
+    },
+    workspace : {
+        registerTextDocumentContentProvider: jest.fn(),
+        openTextDocument: jest.fn().mockResolvedValue({}),
+    },
+    window : {
+        showTextDocument: jest.fn().mockResolvedValue({}),
+        showInputBox: jest.fn().mockResolvedValue(''),
+        showInformationMessage: jest.fn().mockResolvedValue({}),
+        showErrorMessage: jest.fn().mockResolvedValue({}),
+    },
+    Uri : {
+        parse: jest.fn().mockReturnValue({ }),
+        file: jest.fn().mockReturnValue({}),
+    },
+    env : {
+        openExternal: jest.fn().mockResolvedValue(undefined),
+    },
+
+}));
+
+jest.mock('fs', () => ({
+    readdir : jest.fn(),
+    stat : jest.fn(),
+    readFile : jest.fn(),
+}));
+jest.mock('os');
+jest.mock('path');
+jest.mock('util', () => ({
+    ...jest.requireActual('util'),
+    promisify: jest.fn().mockImplementation((fn) => fn),
+}));
+
+
+describe('LogHelper test Test', () => {
+    let logHelper: LogHelper;
+    let mockProxyManager: ProxyManager;
+    let mockSourceCache: SourceCache;
+
+    const mockInstanceStore = new MockInstanceStore();
+
+    beforeAll(() => {
+        prepareTestContainers();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    beforeEach(() => {
+        mockSourceCache = mock<SourceCache>();
+        logHelper = new LogHelper(mockSourceCache, mockProxyManager);
+    });
+
+    afterEach(() => {
+        mockInstanceStore.restore();
+        jest.clearAllMocks();
+    });
+
+    test('should handle URI', async () => {
+        const mockUri = logHelper.handleUri(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+        await logHelper.handleUri(mockUri);
+
+        expect(vscode.window.openTextDocument).toHaveBeenCalled();
+        expect(vscode.window.showTextDocument).toHaveBeenCalled();
+
+    });
+
+    test('should provide text document content', async () => {
+        const testPath = 'test';
+        logHelper.cacheResults.set(testPath, 'Test log content');
+        const content = await logHelper.provideTextDocumentContent(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+
+        expect(content).toBe('Test log content');
+    });
+
+    test('should open log handler', async () => {
+        await logHelper.openLogHandler(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+
+        expect(vscode.env.openExternal).toHaveBeenCalled();
+    });
+
+    test('should send logs handler', async () => {
+        logHelper.getRecentLogs = jest.fn().mockResolvedValue(['test']);
+        logHelper.uploadLogsToSandra = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+        logHelper.retrieveAndSendLogsEmail = jest.fn().mockResolvedValue(undefined);
+        vscode.window.showInformationMessage = jest.fn().mockResolvedValue(undefined);
+
+        await logHelper.sendLogsHandler();
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Log files uploaded successfully.');
+    });
+
+    test('should get recent logs', async () => {
+        const readdirMock = fs.readdir as jest.MockedFunction<typeof fs.readdir>;
+        const statMock = fs.stat as jest.MockedFunction<typeof fs.stat>;
+        const promisifyMock = util.promisify as jest.MockedFunction<typeof util.promisify>;
+        const tmpdirMock = os.tmpdir as jest.MockedFunction<typeof os.tmpdir>;
+
+        tmpdirMock.mockReturnValue('/tmp');
+        readdirMock.mockImplementation(() => Promise.resolve(['vscode_test']));
+        statMock.mockImplementation(() => Promise.resolve({ isFile: () => true, birthtime: new Date() }));
+        promisifyMock.mockImplementation((fn) => fn);
+
+        const logs = await logHelper.getRecentLogs();
+
+        expect(logs).toEqual(['/tmp/quartz/vscode_test']);
+    });
+
+    test('should upload logs to Sandra', async () => {
+        const promisifyMock = util.promisify as jest.MockedFunction<typeof util.promisify>;
+        promisifyMock.mockImplementation(() => () => Promise.resolve(Buffer.from('test')));
+        mockProxyManager.sendRequest = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+
+        const logs = await logHelper.uploadLogsToSandra(['test']);
+
+        expect(logs).toEqual([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+    });
+
+    test('should retrieve and send logs email', async () => {
+        mockProxyManager.sendRequest = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+
+        await logHelper.retrieveAndSendLogsEmail();
+
+        expect(mockProxyManager.sendRequest).toHaveBeenCalledTimes(2);
+    });
+
+    describe('dispose', () => {
+        test('should dispose of trash', () => {
+            logHelper.dispose();
+        });
+    });
+});
+
 
   private getRecentDays(): string[] {
         const recentDays: string[] = [];

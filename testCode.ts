@@ -588,3 +588,61 @@ public async getRecentLogs(): Promise<string[]> {
     const recentDays = Array.from({ length: this._numberOfDays }, (_, i) => format(subDays(new Date(), i), 'MM/dd/yyyy'));
     // ...
 }
+
+
+import { format } from 'date-fns';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as util from 'util';
+
+public async getRecentLogs(): Promise<string[]> {
+    const recentDays = this.getRecentDays(); // Ensure this is an array of strings in 'MM/dd/yyyy' format
+    const logFiles: string[] = [];
+    const tempDir = os.tmpdir();
+
+    // Function to process and filter files by prefix and creation date
+    const processFiles = async (directory: string, prefix: string, checkDate: boolean = true) => {
+        try {
+            const files = await util.promisify(fs.readdir)(directory);
+            for (const file of files) {
+                if (file.startsWith(prefix)) {
+                    const filePath = path.join(directory, file);
+                    const fileStat = await util.promisify(fs.stat)(filePath);
+                    if (fileStat.isFile()) {
+                        // If checkDate is true, filter files by their creation dates
+                        if (checkDate) {
+                            const birthDateFormatted = format(fileStat.birthtime, "MM/dd/yyyy");
+                            if (recentDays.includes(birthDateFormatted)) {
+                                logFiles.push(filePath);
+                            }
+                        } else {
+                            logFiles.push(filePath);
+                        }
+                    } else if (fileStat.isDirectory()) {
+                        // Recursively process nested directories
+                        await processFiles(filePath, "vscode_", checkDate);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(`Error processing files in directory ${directory}:`, err);
+        }
+    };
+
+    // Process files directly under 'quartz' directory
+    const quartzDir = path.join(tempDir, 'quartz');
+    await processFiles(quartzDir, "vscode_");
+
+    // Process files within directories starting with 'quartz_vscode_extension'
+    const tempFiles = await util.promisify(fs.readdir)(tempDir);
+    for (const tempFile of tempFiles) {
+        if (tempFile.startsWith('quartz_vscode_extension')) {
+            const dirPath = path.join(tempDir, tempFile);
+            // For directories, no need to check the date, as the requirement seems to fetch all nested files
+            await processFiles(dirPath, "vscode_", false);
+        }
+    }
+
+    return logFiles;
+}

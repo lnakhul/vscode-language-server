@@ -579,3 +579,12 @@ describe('LogHelper', () => {
         expect(proxyManager.sendRequest).toHaveBeenCalledTimes(2);
     });
 });
+
+import { subDays, format } from 'date-fns';
+
+// ...
+
+public async getRecentLogs(): Promise<string[]> {
+    const recentDays = Array.from({ length: this._numberOfDays }, (_, i) => format(subDays(new Date(), i), 'MM/dd/yyyy'));
+    // ...
+}

@@ -711,3 +711,61 @@ public async getRecentLogs(): Promise<string[]> {
 
     return logFiles;
 }
+
+
+
+
+import { format } from 'date-fns';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as util from 'util';
+
+public async getRecentLogs(): Promise<string[]> {
+    const recentDays = this.getRecentDays(); // Ensure this is an array of strings in 'MM/dd/yyyy' format
+    const logFiles: string[] = [];
+    const tempDir = os.tmpdir();
+
+    const processQuartzFiles = async (directory: string) => {
+        const files = await util.promisify(fs.readdir)(directory);
+        for (const file of files) {
+            if (file.startsWith('vscode_')) {
+                const filePath = path.join(directory, file);
+                const fileStat = await util.promisify(fs.stat)(filePath);
+                if (fileStat.isFile()) {
+                    const birthDateFormatted = format(fileStat.birthtime, "MM/dd/yyyy");
+                    if (recentDays.includes(birthDateFormatted)) {
+                        logFiles.push(filePath);
+                    }
+                }
+            }
+        }
+    };
+
+    const processExtensionDirectories = async (directory: string) => {
+        const items = await util.promisify(fs.readdir)(directory, { withFileTypes: true });
+        for (const item of items) {
+            if (item.isDirectory() && item.name.startsWith('quartz_vscode_extension')) {
+                const dirPath = path.join(directory, item.name);
+                const fileStat = await util.promisify(fs.stat)(dirPath);
+                const dirBirthDateFormatted = format(fileStat.birthtime, "MM/dd/yyyy");
+                if (recentDays.includes(dirBirthDateFormatted)) {
+                    // Assuming there's only one file, process it without checking the name
+                    const nestedFiles = await util.promisify(fs.readdir)(dirPath);
+                    if (nestedFiles.length > 0) { // Safety check; assuming the first file is the one we want
+                        logFiles.push(path.join(dirPath, nestedFiles[0])); // Add the single file in this directory
+                    }
+                }
+            }
+        }
+    };
+
+    // Process files in "quartz" directory with date filtering
+    const quartzDir = path.join(tempDir, 'quartz');
+    await processQuartzFiles(quartzDir);
+
+    // Process directories starting with "quartz_vscode_extension" with date filtering
+    await processExtensionDirectories(tempDir);
+
+    return logFiles;
+}

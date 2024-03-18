@@ -207,3 +207,94 @@ describe('LogHelper test Test', () => {
     expect(zlib.gzip).not.toHaveBeenCalled();
     expect(mockProxyManager.sendRequest).not.toHaveBeenCalled();
 });
+
+
+import * as vscode from 'vscode';
+import { LogHelper } from '../logHelper';
+import { ProxyManager } from './proxyManager'; // Adjust this import according to your project structure
+import { mock } from 'jest-mock-extended';
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+
+jest.mock('vscode', () => ({
+    commands: {
+        registerCommand: jest.fn(),
+    },
+    workspace: {
+        registerTextDocumentContentProvider: jest.fn(),
+        openTextDocument: jest.fn().mockResolvedValue({}),
+    },
+    window: {
+        showTextDocument: jest.fn().mockResolvedValue({}),
+        showInformationMessage: jest.fn().mockResolvedValue({}),
+        showErrorMessage: jest.fn().mockResolvedValue({}),
+        showInputBox: jest.fn().mockResolvedValue(''),
+    },
+    Uri: {
+        parse: jest.fn().mockReturnValue({}),
+        file: jest.fn().mockReturnValue({}),
+    },
+    env: {
+        openExternal: jest.fn().mockResolvedValue(undefined),
+    },
+    ProgressLocation: {
+        Notification: {},
+    },
+}));
+
+jest.mock('fs');
+jest.mock('os');
+jest.mock('path');
+jest.mock('util', () => ({
+    ...jest.requireActual('util'),
+    promisify: jest.fn().mockImplementation((fn) => fn),
+}));
+jest.mock('zlib', () => ({
+    gzip: jest.fn((input, callback) => callback(null, Buffer.from(input))),
+}));
+
+describe('LogHelper Tests', () => {
+    let logHelper: LogHelper;
+    let mockProxyManager: ReturnType<typeof mock>;
+
+    beforeEach(() => {
+        mockProxyManager = mock<ProxyManager>();
+        logHelper = new LogHelper(mockProxyManager, new SourceCache()); // Assuming SourceCache is correctly instantiated or mocked
+    });
+
+    test('handleUri opens and shows the document', async () => {
+        const mockUri = vscode.Uri.parse('quartz-extension-log://authority/path?path=test');
+        await logHelper.handleUri(mockUri);
+
+        expect(vscode.workspace.openTextDocument).toHaveBeenCalled();
+        expect(vscode.window.showTextDocument).toHaveBeenCalled();
+    });
+
+    test('provideTextDocumentContent returns log content', async () => {
+        const testPath = 'testPath';
+        logHelper.cacheResults.set(testPath, 'Test log content');
+        const content = await logHelper.provideTextDocumentContent(vscode.Uri.parse(`quartz-extension-log://authority/path?path=${testPath}`));
+
+        expect(content).toBe('Test log content');
+    });
+
+    test('openLogHandler opens external URI', async () => {
+        await logHelper.openLogHandler(vscode.Uri.parse('quartz-extension-log://authority/path?path=test'));
+
+        expect(vscode.env.openExternal).toHaveBeenCalled();
+    });
+
+    test('sendLogsHandler uploads logs and shows information message', async () => {
+        mockProxyManager.sendRequest.mockResolvedValue([
+            { fileName: 'test', logContent: 'content', url: 'test' },
+        ]);
+        logHelper.getRecentLogs = jest.fn().mockResolvedValue(['test']);
+        logHelper.uploadLogsToSandra = jest.fn().mockResolvedValue([{ fileName: 'test', logContent: 'content', url: 'test' }]);
+
+        await logHelper.sendLogsHandler();
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Log files uploaded successfully.');
+    });
+
+    // Add more tests here following the same structure for other functionalities
+});
+

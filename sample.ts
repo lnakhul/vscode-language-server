@@ -480,4 +480,53 @@ describe('LogHelper Tests - Simplified', () => {
   // Additional tests as needed
 });
 
+import { logHelper } from './path/to/logHelper'; // Adjust path accordingly
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as util from 'util';
+
+jest.mock('fs');
+jest.mock('os');
+jest.mock('util');
+
+test('should get recent logs from both quartz and extension directories', async () => {
+  const mockOsTempdir = os.tmpdir as jest.MockedFunction<typeof os.tmpdir>;
+  const mockFsReaddir = fs.readdir as jest.MockedFunction<typeof fs.readdir>;
+  const mockFsStat = fs.stat as jest.MockedFunction<typeof fs.stat>;
+  const mockUtilPromisify = util.promisify as jest.MockedFunction<typeof util.promisify>;
+
+  mockOsTempdir.mockReturnValue('/tmp');
+
+  // Mock data for quartz and extension directories, simulating realistic scenarios
+  mockFsReaddir.mockResolvedValueOnce(['vscode_test_recent.log', 'not_recent.log', 'other_file.txt']);
+  mockFsReaddir.mockResolvedValueOnce(['quartz_vscode_extension_recent.log'], { withFileTypes: true });
+  mockFsReaddir.mockResolvedValueOnce(['nested_file.txt']); // For nested directory
+
+  // Mock stat results for different file paths and timestamps
+  mockFsStat.mockImplementation((filePath) => {
+    if (filePath.endsWith('vscode_test_recent.log')) {
+      return Promise.resolve({ birthtime: new Date('2024-03-18') }); // Recent file
+    } else if (filePath.endsWith('quartz_vscode_extension_recent.log')) {
+      return Promise.resolve({ birthtime: new Date('2024-03-18') }); // Recent file
+    } else {
+      return Promise.resolve({ birthtime: new Date('2024-03-15') }); // Not recent
+    }
+  });
+
+  // Set up mock for getRecentDays
+  logHelper.getRecentDays = jest.fn().mockReturnValue(['03/18/2024']);
+
+  const recentLogs = await logHelper.getRecentLogs();
+
+  expect(recentLogs).toEqual([
+    path.join('/tmp', 'quartz', 'vscode_test_recent.log'),
+    path.join('/tmp', 'quartz_vscode_extension', 'quartz_vscode_extension_recent.log'),
+  ]);
+
+  // Verify calls to fs functions and util.promisify
+  expect(mockFsReaddir).toHaveBeenCalledTimes(3); // 1 for quartz, 1 for extension, 1 for nested
+  expect(mockFsStat).toHaveBeenCalledTimes(4); // 2 for quartz, 2 for extension directory
+  expect(mockUtilPromisify).toHaveBeenCalledTimes(3); // Once for each fs function
+});
 

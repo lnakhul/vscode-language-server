@@ -298,3 +298,36 @@ describe('LogHelper Tests', () => {
     // Add more tests here following the same structure for other functionalities
 });
 
+
+             test('should get recent logs', async () => {
+    class MockDirent {
+        name: string;
+        constructor(name: string) {
+            this.name = name;
+        }
+        isFile() {
+            return true;
+        }
+        isDirectory() {
+            return false;
+        }
+    }
+
+    const readdirMock = fs.readdir as jest.MockedFunction<typeof fs.readdir>;
+    const statMock = fs.stat as jest.MockedFunction<typeof fs.stat>;
+    const tmpdirMock = jest.spyOn(os, 'tmpdir');
+
+    tmpdirMock.mockReturnValue('/tmp');
+    readdirMock.mockImplementation((path, options) => {
+        if (options && options.withFileTypes) {
+            return Promise.resolve([new MockDirent('quartz_vscode_extension_test')]);
+        } else {
+            return Promise.resolve(['vscode_test']);
+        }
+    });
+    statMock.mockImplementation(() => Promise.resolve({ isFile: () => true, birthtime: new Date() }));
+
+    const logs = await logHelper.getRecentLogs();
+
+    expect(logs).toEqual(['/tmp/quartz/vscode_extension_test/vscode_test']);
+});

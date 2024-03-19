@@ -445,3 +445,39 @@ describe('LogHelper Tests', () => {
   // Additional tests and setup
 });
 
+
+import { LogHelper } from '../logHelper';
+// Additional necessary imports
+
+describe('LogHelper Tests - Simplified', () => {
+  let logHelper;
+  
+  beforeEach(() => {
+    // Initialize your LogHelper with any necessary mocks or real dependencies
+    logHelper = new LogHelper(/* Mocked dependencies if needed */);
+    
+    // Mock getRecentDays to return a specific set of dates for testing
+    logHelper.getRecentDays = jest.fn().mockReturnValue(['01/01/2022', '01/02/2022']);
+    
+    // Simplify fs and util mocking by mocking LogHelper's internal method that would use them
+    // Assuming getRecentLogs relies on these internal methods to fetch file paths
+    logHelper.getFilePathsInQuartz = jest.fn().mockReturnValue(['/tmp/quartz/vscode_log1.txt', '/tmp/quartz/vscode_log2.txt']);
+    logHelper.getFilePathsInExtensions = jest.fn().mockReturnValue(['/tmp/quartz_vscode_extension123/extension_file.txt']);
+  });
+
+  test('getRecentLogs retrieves correct logs based on mocked internal methods', async () => {
+    // Execute getRecentLogs which now relies on our mocked methods
+    const logs = await logHelper.getRecentLogs();
+
+    // Assert that the returned logs match our expectations
+    expect(logs).toContain('/tmp/quartz/vscode_log1.txt');
+    expect(logs).toContain('/tmp/quartz/vscode_log2.txt');
+    expect(logs).toContain('/tmp/quartz_vscode_extension123/extension_file.txt');
+    // Make sure the count matches to ensure no unexpected files are included
+    expect(logs.length).toBe(3);
+  });
+
+  // Additional tests as needed
+});
+
+

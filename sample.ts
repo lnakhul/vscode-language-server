@@ -331,3 +331,48 @@ describe('LogHelper Tests', () => {
 
     expect(logs).toEqual(['/tmp/quartz/vscode_extension_test/vscode_test']);
 });
+
+
+test('should get recent logs from quartz and extension directories', async () => {
+  const mockOsTempdir = os.tmpdir as jest.MockedFunction<typeof os.tmpdir>;
+  const mockFsReaddir = fs.readdir as jest.MockedFunction<typeof fs.readdir>;
+  const mockFsStat = fs.stat as jest.MockedFunction<typeof fs.stat>;
+  const mockUtilPromisify = util.promisify as jest.MockedFunction<typeof util.promisify>;
+
+  mockOsTempdir.mockReturnValue('/tmp');
+
+  // Mock data for quartz directory
+  mockFsReaddir.mockResolvedValueOnce(['vscode_test_recent.log', 'not_recent.log']); // Simulate some files
+  mockFsStat.mockImplementation((filePath) => {
+    if (filePath.endsWith('vscode_test_recent.log')) {
+      return Promise.resolve({ birthtime: new Date('2024-03-18') }); // Recent file
+    } else {
+      return Promise.resolve({ birthtime: new Date('2024-03-15') }); // Not recent
+    }
+  });
+
+  // Mock data for extension directory
+  mockFsReaddir.mockResolvedValueOnce(['quartz_vscode_extension_recent.log'], { withFileTypes: true });
+  mockFsStat.mockImplementation((filePath) => {
+    if (filePath.endsWith('quartz_vscode_extension_recent.log')) {
+      return Promise.resolve({ birthtime: new Date('2024-03-18') }); // Recent file
+    } else {
+      return Promise.resolve({ birthtime: new Date('2024-03-12') }); // Not recent
+    }
+  });
+
+  // Assume recentDays is set to include '03/18/2024'
+  logHelper.getRecentDays = jest.fn().mockReturnValue(['03/18/2024']);
+
+  const recentLogs = await logHelper.getRecentLogs();
+
+  expect(recentLogs).toEqual([
+    path.join('/tmp', 'quartz', 'vscode_test_recent.log'),
+    path.join('/tmp', 'quartz_vscode_extension', 'quartz_vscode_extension_recent.log'),
+  ]);
+
+  // Verify calls to fs functions
+  expect(mockFsReaddir).toHaveBeenCalledTimes(2);
+  expect(mockFsStat).toHaveBeenCalledTimes(4); // 2 for quartz, 2 for extension directory
+  expect(mockUtilPromisify).toHaveBeenCalledTimes(3); // Once for each fs function
+});

@@ -376,3 +376,72 @@ test('should get recent logs from quartz and extension directories', async () =>
   expect(mockFsStat).toHaveBeenCalledTimes(4); // 2 for quartz, 2 for extension directory
   expect(mockUtilPromisify).toHaveBeenCalledTimes(3); // Once for each fs function
 });
+
+
+import * as fs from 'fs';
+import * as util from 'util';
+import { LogHelper } from '../logHelper';
+// Import other necessary modules and mocks
+
+jest.mock('fs');
+jest.mock('util', () => ({
+  ...jest.requireActual('util'),
+  promisify: jest.fn(),
+}));
+
+describe('LogHelper Tests', () => {
+  let logHelper;
+  // Setup for LogHelper instance
+
+  beforeEach(() => {
+    // Reset and configure mocks for each test
+    jest.resetAllMocks();
+    util.promisify.mockImplementation((fn) => fn); // Simplify promisify for mocking
+
+    const mockFiles = {
+      '/tmp/quartz': ['vscode_log1.txt', 'vscode_log2.txt', 'other_file.txt'],
+      '/tmp/quartz_vscode_extension123': ['extension_specific_file.txt'],
+    };
+
+    fs.readdir.mockImplementation((path, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options;
+        options = {};
+      }
+      if (options.withFileTypes) {
+        const dirents = mockFiles[path].map((name) => ({
+          name,
+          isDirectory: () => name.startsWith('quartz_vscode_extension'),
+          isFile: () => !name.startsWith('quartz_vscode_extension'),
+        }));
+        callback(null, dirents);
+      } else {
+        callback(null, mockFiles[path] || []);
+      }
+    });
+
+    fs.stat.mockImplementation((path, callback) => {
+      const isDirectory = path.includes('quartz_vscode_extension');
+      callback(null, {
+        isFile: () => !isDirectory,
+        isDirectory: () => isDirectory,
+        birthtime: new Date('2021-01-01'), // Use a static date for simplicity
+      });
+    });
+
+    logHelper = new LogHelper(/* Dependencies */);
+  });
+
+  test('getRecentLogs retrieves correct logs', async () => {
+    const logs = await logHelper.getRecentLogs();
+    // Assuming getRecentDays includes '2021-01-01'
+    expect(logs).toContain('/tmp/quartz/vscode_log1.txt');
+    expect(logs).toContain('/tmp/quartz/vscode_log2.txt');
+    expect(logs).not.toContain('/tmp/quartz/other_file.txt');
+    expect(logs).toContain('/tmp/quartz_vscode_extension123/extension_specific_file.txt');
+    // Further assertions as necessary
+  });
+
+  // Additional tests and setup
+});
+

@@ -530,3 +530,26 @@ test('should get recent logs from both quartz and extension directories', async 
   expect(mockUtilPromisify).toHaveBeenCalledTimes(3); // Once for each fs function
 });
 
+
+def handle_uploadLogFile(self, ctx, fileNames: List[str]) -> List[Dict]:
+    """Uploads log files to Sandra based on provided filenames."""
+    try:
+        uploaded_files = []
+        for fileName in fileNames:
+            filePath = os.path.join('<directory_where_log_files_are_stored>', fileName)
+            with open(filePath, 'r') as file:
+                log_content = file.read()
+            file_path_in_sandra = self.store_in_sandra(fileName, log_content)
+            if file_path_in_sandra:
+                url = self.generate_file_url(file_path_in_sandra)
+                uploaded_files.append({
+                    "fileName": fileName,
+                    "url": url
+                })
+        if not uploaded_files:
+            raise Exception("No log files were uploaded.")
+        return uploaded_files
+    except Exception as e:
+        logger.error(f"Failed to upload log files: {e}")
+        return []
+

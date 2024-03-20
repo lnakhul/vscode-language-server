@@ -530,6 +530,30 @@ test('should get recent logs from both quartz and extension directories', async 
   expect(mockUtilPromisify).toHaveBeenCalledTimes(3); // Once for each fs function
 });
 
+private async uploadLogsToSandra(logFiles: string[]): Promise<LogFileContent[]> {
+    try {
+        const fileNames = logFiles.map(path.basename); // Just get the file names
+        const response = await vscode.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false
+        }, async (progress, token) => {
+            progress.report({ message: 'Transferring log files to Sandra...' });
+            // Send only file names to proxy
+            return await this.proxyManager.sendRequest<LogFileContent[]>(token, 'uploadLogs', fileNames);
+        });
+        
+        if (!response || !Array.isArray(response) || response.length === 0) {
+            throw new Error('Failed to transfer log files to Sandra.');
+        }
+        return response;
+    } catch (error) {
+        Logger.error(`Failed to transfer log files: ${error}`);
+        vscode.window.showErrorMessage('Failed to transfer log files.');
+        return [];
+    }
+}
+
+
 
 def handle_uploadLogFile(self, ctx, fileNames: List[str]) -> List[Dict]:
     """Uploads log files to Sandra based on provided filenames."""

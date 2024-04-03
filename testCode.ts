@@ -769,3 +769,41 @@ public async getRecentLogs(): Promise<string[]> {
 
     return logFiles;
 }
+
+
+async handleUri(uri: vscode.Uri): Promise<void> {
+    const query = querystring.parse(uri.query);
+    const logFileName = query.path as string;
+
+    if (!logFileName) {
+        vscode.window.showErrorMessage('Invalid URI. The "path" parameter is missing.');
+        return;
+    }
+
+    // Request the log content from the proxy using the filename.
+    try {
+        const logContent = await this.proxyManager.sendRequest<string>('log:getLogContent', { fileName: logFileName });
+        this.cacheResults.set(logFileName, logContent);
+        
+        const logUri = vscode.Uri.parse(`${this.SCHEME}:${logFileName}`);
+        const doc = await vscode.workspace.openTextDocument(logUri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to retrieve log: ${error}`);
+    }
+}
+
+async provideTextDocumentContent(uri: vscode.Uri): Promise<string | undefined> {
+    const fileName = uri.path;
+    return this.cacheResults.get(fileName);
+}
+
+def handle_getLogContent(self, ctx, fileName: str) -> str:
+    """Returns the content of the specified log file."""
+    file_path = os.path.join(self.logSourceDir, fileName)
+    try:
+        log_obj = read_or_new_pymodule(self.db, file_path)
+        return log_obj.contents.get('text', '')
+    except Exception as e:
+        logger.error(f"Failed to retrieve log content for {fileName}: {e}")
+        raise Exception("Log file content could not be retrieved.")

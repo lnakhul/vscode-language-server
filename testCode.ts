@@ -799,11 +799,16 @@ async provideTextDocumentContent(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 def handle_getLogContent(self, ctx, fileName: str) -> str:
-    """Returns the content of the specified log file."""
-    file_path = os.path.join(self.logSourceDir, fileName)
+    """Retrieve log content from Sandra DB based on the fileName."""
     try:
-        log_obj = read_or_new_pymodule(self.db, file_path)
-        return log_obj.contents.get('text', '')
+        # Assuming logSourceDir is a directory containing log files.
+        # Modify query as necessary to match your application's structure.
+        for file_path in sandra.walk(self.logSourceDir, db=self.db, returnDirs=False):
+            if os.path.basename(file_path) == fileName:
+                log_obj = sandra.readObjects([file_path], db=self.db)[0]
+                return log_obj.contents.get('text', '')
+        raise Exception(f"Log file {fileName} not found.")
     except Exception as e:
         logger.error(f"Failed to retrieve log content for {fileName}: {e}")
         raise Exception("Log file content could not be retrieved.")
+

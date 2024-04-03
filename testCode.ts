@@ -812,3 +812,23 @@ def handle_getLogContent(self, ctx, fileName: str) -> str:
         logger.error(f"Failed to retrieve log content for {fileName}: {e}")
         raise Exception("Log file content could not be retrieved.")
 
+
+async handleUri(uri: vscode.Uri): Promise<void> {
+    const queryParams = querystring.parse(uri.query);
+    const logFileName = queryParams.path as string; // Ensure this is the identifier for Sandra DB
+
+    if (!logFileName) {
+        vscode.window.showErrorMessage('Invalid URI: "path" parameter is missing.');
+        return;
+    }
+
+    try {
+        const logContent = await this.proxyManager.sendRequest<string>(null, 'getLogContent', { fileName: logFileName });
+        this.cacheResults.set(logFileName, logContent);
+        const logUri = vscode.Uri.parse(`${this.SCHEME}://authority/${logFileName}`);
+        const doc = await vscode.workspace.openTextDocument(logUri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to open log file: ${error}`);
+    }
+}

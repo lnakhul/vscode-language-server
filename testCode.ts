@@ -832,3 +832,48 @@ async handleUri(uri: vscode.Uri): Promise<void> {
         vscode.window.showErrorMessage(`Failed to open log file: ${error}`);
     }
 }
+
+
+
+import sandra
+from typing import List, Dict
+
+class BookmarkService:
+    PREFIX = 'bookmark'
+    
+    def __init__(self, db):
+        self.db = db
+        self.bookmark_dir = f"/vscode/bookmarks/{sandra.USERNAME}"
+    
+    def _bookmark_path(self, bookmark):
+        return f"{self.bookmark_dir}/{bookmark['type']}/{bookmark['path'].replace('/', ':')}"
+
+    def add_bookmark(self, bookmark: Dict):
+        """Adds a new bookmark."""
+        bm_path = self._bookmark_path(bookmark)
+        obj = sandra.read_or_new(self.db, bm_path, text=str(bookmark))
+        obj.write()
+
+    def get_bookmarks(self) -> List[Dict]:
+        """Retrieves all bookmarks."""
+        bookmarks = []
+        for bm_path in sandra.walk(self.bookmark_dir, db=self.db, returnDirs=False):
+            bm_obj = sandra.read(self.db, bm_path)
+            bookmarks.append(eval(bm_obj.text))
+        return bookmarks
+
+    def update_bookmark(self, bookmark: Dict):
+        """Updates an existing bookmark."""
+        bm_path = self._bookmark_path(bookmark)
+        obj = sandra.read_or_new(self.db, bm_path, text=str(bookmark))
+        obj.text = str(bookmark)
+        obj.write()
+
+    def delete_bookmark(self, bookmark: Dict):
+        """Deletes a bookmark."""
+        bm_path = self._bookmark_path(bookmark)
+        sandra.delete(self.db, bm_path)
+
+# Usage example
+db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
+bookmark_service = BookmarkService(db)

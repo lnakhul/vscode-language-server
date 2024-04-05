@@ -877,3 +877,28 @@ class BookmarkService:
 # Usage example
 db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
 bookmark_service = BookmarkService(db)
+
+def get_bookmarks(self):
+        """Retrieves bookmark objects and their metadata."""
+        bookmarks_path = self.user_bookmarks_path()
+        bookmark_paths = list(sandra.walk(bookmarks_path, db=self.db, returnDirs=False))
+        bookmarks = list(sandra.readObjects(bookmark_paths, db=self.db))
+
+        # Process bookmarks to extract metadata and content
+        processed_bookmarks = []
+        for bookmark_obj in bookmarks:
+            try:
+                # Assuming bookmarks are stored as text in a property named 'text'
+                bookmark_content = ast.literal_eval(bookmark_obj.text) if hasattr(bookmark_obj, 'text') else {}
+            except (ValueError, SyntaxError):
+                # Handle the case where the text property is not a properly formatted string
+                bookmark_content = {}
+
+            bookmark_data = {
+                'path': bookmark_obj.path(),
+                'content': bookmark_content,
+                # Add additional processing as needed
+            }
+            processed_bookmarks.append(bookmark_data)
+
+        return processed_bookmarks

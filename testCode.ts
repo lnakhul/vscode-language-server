@@ -86,3 +86,17 @@ getChildren(element?: BookmarkTreeItem): Promise<BookmarkTreeItem[]> {
   }
 }
 
+getChildren(element?: BookmarkTreeItem): Promise<BookmarkTreeItem[] | undefined> {
+      if (!element) {
+        // Load root-level bookmarks if no parent element is specified
+        this.bookmarkManager.loadBookmarks().then(() => {
+          this.refresh(); // Make sure to refresh the TreeView to show the loaded bookmarks
+        });
+        // Filter out root-level bookmarks to display
+        const rootBookmarks = this.bookmarks.filter(bookmark => !bookmark.path.includes('/'));
+        return Promise.resolve(rootBookmarks.map(bookmark => this.createBookmarkItem(bookmark)));
+      }
+      // ... handle children bookmarks if element is specified
+      return Promise.resolve([]);
+    }
+

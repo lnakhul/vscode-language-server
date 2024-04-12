@@ -96,5 +96,37 @@ private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
         area.children.push(fileElement);
     });
 
+private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
+    const areas: BookmarkAreaElement[] = [];
+    const bookmarksMap = new Map<string, BookmarkFileElement>();
+
+    // Populate the map with files and line bookmarks
+    this.bookmarks.forEach(bookmark => {
+        let fileElement = bookmarksMap.get(bookmark.path);
+        if (!fileElement) {
+            fileElement = new BookmarkFileElement(bookmark, new vscode.ThemeIcon('file'));
+            bookmarksMap.set(bookmark.path, fileElement);
+        }
+        const lineElement = new BookmarkLineElement(bookmark);
+        fileElement.children.push(lineElement);
+    });
+
+    // Organize files into areas based on their directory paths
+    bookmarksMap.forEach((fileElement, path) => {
+        const dirPath = pathModule.dirname(path);
+        let area = areas.find(area => area.id === dirPath);
+        if (!area) {
+            // Create a new BookmarkAreaElement based on the directory path
+            area = new BookmarkAreaElement({type: 'folder', path: dirPath, line: 0}, fileElement);
+            area.id = pathModule.basename(dirPath);  // Or any other appropriate ID
+            areas.push(area);
+        }
+        area.children.push(fileElement);
+    });
+
+    return areas;
+}
+
+
     return areas;
 }

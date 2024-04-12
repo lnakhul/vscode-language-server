@@ -67,36 +67,34 @@ def get_bookmarks(self):
         return processed_bookmarks
 
 
-getChildren(element?: BookmarkTreeItem): Promise<BookmarkTreeItem[]> {
-  if (element) {
-    // Assume that the element's bookmark path ends with a delimiter to separate folders (e.g., '/')
-    const prefix = element.bookmark.path.endsWith('/') ? element.bookmark.path : element.bookmark.path + '/';
-    
-    // Find child bookmarks that directly belong to this folder, not nested further
-    const childBookmarks = this.bookmarks.filter(bookmark => {
-      // Check if the bookmark is a direct child of the element's bookmark path
-      const isDirectChild = bookmark.path.startsWith(prefix) && bookmark.path.slice(prefix.length).indexOf('/') === -1;
-      return isDirectChild;
+private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
+    const areas: BookmarkAreaElement[] = [];
+    const bookmarksMap = new Map<string, BookmarkFileElement>();
+
+    this.bookmarks.forEach(bookmark => {
+        let fileElement = bookmarksMap.get(bookmark.path);
+        if (!fileElement) {
+            fileElement = new BookmarkFileElement(bookmark, new vscode.ThemeIcon('file'));
+            bookmarksMap.set(bookmark.path, fileElement);
+        }
+
+        const lineElement = new BookmarkLineElement(bookmark);
+        fileElement.children.push(lineElement);
     });
-    return Promise.resolve(childBookmarks.map(this.createBookmarkItem));
-  } else {
-    // Filter bookmarks that do not have a '/' in their path, assuming they are at the root level
-    const rootBookmarks = this.bookmarks.filter(bookmark => !bookmark.path.includes('/'));
-    return Promise.resolve(rootBookmarks.map(this.createBookmarkItem));
-  }
+
+    bookmarksMap.forEach((fileElement, path) => {
+        const dirPath = pathModule.dirname(path);
+        let area = areas.find(area => area.id === dirPath);
+        if (!area) {
+            area = new BookmarkAreaElement({
+                path: dirPath,
+                name: pathModule.basename(dirPath),
+                bookmarkArea: fileElement
+            });
+            areas.push(area);
+        }
+        area.children.push(fileElement);
+    });
+
+    return areas;
 }
-
-getChildren(element?: BookmarkTreeItem): Promise<BookmarkTreeItem[] | undefined> {
-      if (!element) {
-        // Load root-level bookmarks if no parent element is specified
-        this.bookmarkManager.loadBookmarks().then(() => {
-          this.refresh(); // Make sure to refresh the TreeView to show the loaded bookmarks
-        });
-        // Filter out root-level bookmarks to display
-        const rootBookmarks = this.bookmarks.filter(bookmark => !bookmark.path.includes('/'));
-        return Promise.resolve(rootBookmarks.map(bookmark => this.createBookmarkItem(bookmark)));
-      }
-      // ... handle children bookmarks if element is specified
-      return Promise.resolve([]);
-    }
-

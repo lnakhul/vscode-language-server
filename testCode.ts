@@ -130,3 +130,7 @@ private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
 
     return areas;
 }
+
+
+
+

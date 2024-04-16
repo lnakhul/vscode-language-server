@@ -107,4 +107,28 @@ private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
   }
 
 
+  async openBookmark(bookmark?: Bookmark): Promise<void> {
+    let path: string|undefined = undefined;
+    let line: number|undefined = undefined;
 
+    if (bookmark) {
+        path = bookmark.path;
+        line = bookmark.line;
+    } else {
+        // If no bookmark is provided, you could implement a function to select a bookmark
+        // For example:
+        // bookmark = await selectBookmark();
+        // path = bookmark.path;
+        // line = bookmark.line;
+    }
+
+    if (!path) return;
+
+    const uri = vscode.Uri.file(path);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc, { preview: true });
+
+    if (line) {
+        editor.revealRange(new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line + 1, 0)));
+    }
+}

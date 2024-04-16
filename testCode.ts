@@ -132,3 +132,23 @@ private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
         editor.revealRange(new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line + 1, 0)));
     }
 }
+
+
+
+async openBookmark(bookmark: Bookmark): Promise<void> {
+  const uri = vscode.Uri.file(bookmark.path);
+  vscode.workspace.openTextDocument(uri).then(doc => {
+    if (bookmark.line >= doc.lineCount || doc.lineAt(bookmark.line).text.trim() !== bookmark.content) {
+      // The bookmark is invalid, notify the user
+      vscode.window.showInformationMessage('The bookmark is no longer valid.');
+      // Delete the bookmark or skip to the next/previous one
+      this.removeBookmark(bookmark);
+    } else {
+      // The bookmark is valid, navigate to it
+      vscode.window.showTextDocument(doc).then(editor => {
+        editor.selection = new vscode.Selection(bookmark.line, 0, bookmark.line, 0);
+        editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenter);
+      });
+    }
+  });
+}

@@ -152,3 +152,27 @@ async openBookmark(bookmark: Bookmark): Promise<void> {
     }
   });
 }
+
+
+  private handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
+    for (const change of e.contentChanges) {
+      const startLine = change.range.start.line;
+      const endLine = change.range.end.line;
+      const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
+
+      if (lineDelta !== 0) {
+        for (const bookmark of this.bookmarks) {
+          if (bookmark.path === e.document.uri.fsPath) {
+            if (bookmark.line > startLine) {
+              bookmark.line += lineDelta;
+            } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
+              // The bookmarked line was deleted or changed, remove the bookmark or update its content
+              this.removeBookmark(bookmark);
+            }
+          }
+        }
+      }
+    }
+
+    this.refresh();
+  }

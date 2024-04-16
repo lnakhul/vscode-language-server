@@ -209,3 +209,59 @@ private handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
   this.saveBookmarks();
   this.refresh();
 }
+
+
+private handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
+  let refreshNeeded = false;
+  let updateDBNeeded = false;
+
+  const updatedBookmarks: Bookmark[] = [];
+
+  for (const change of e.contentChanges) {
+    const startLine = change.range.start.line;
+    const endLine = change.range.end.line;
+    const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
+
+    this.bookmarks.forEach(bookmark => {
+      if (bookmark.path === e.document.uri.fsPath) {
+        if (bookmark.line > startLine) {
+          bookmark.line += lineDelta;
+          updatedBookmarks.push(bookmark);
+          refreshNeeded = true;
+          updateDBNeeded = true;
+        } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
+          bookmark.content = e.document.lineAt(bookmark.line).text.trim();
+          updatedBookmarks.push(bookmark);
+          refreshNeeded = true;
+          updateDBNeeded = true;
+        }
+      }
+    });
+  }
+
+  // Remove deleted bookmarks
+  this.bookmarks = this.bookmarks.filter(bookmark => {
+    const lineExists = bookmark.line < e.document.lineCount;
+    const contentMatches = bookmark.content === e.document.lineAt(bookmark.line).text.trim();
+    return lineExists && contentMatches;
+  });
+
+  if (refreshNeeded) {
+    this.refresh(); // Update the view
+  }
+
+  if (updateDBNeeded) {
+    // Throttle this if needed to avoid excessive DB updates
+    this.updateBookmarksInDB(updatedBookmarks); // Update the DB
+  }
+}
+
+private async updateBookmarksInDB(updatedBookmarks: Bookmark[]): Promise<void> {
+  try {
+    // Your logic to update bookmarks in the Sandra DB
+    // await this.proxyManager.sendRequest(null, 'bookmark:updateBookmarks', updatedBookmarks);
+    this.saveBookmarks(); // Save bookmarks after successful DB update
+  } catch (error) {
+    vscode.window.showErrorMessage('Failed to update bookmarks in Sandra: ' + error.message);
+  }
+}

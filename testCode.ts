@@ -176,3 +176,36 @@ async openBookmark(bookmark: Bookmark): Promise<void> {
 
     this.refresh();
   }
+
+
+private handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
+  for (const change of e.contentChanges) {
+    const startLine = change.range.start.line;
+    const endLine = change.range.end.line;
+    const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
+
+    this.bookmarks = this.bookmarks.map(bookmark => {
+      if (bookmark.path === e.document.uri.fsPath) {
+        if (bookmark.line > startLine) {
+          // Line number has changed, update it
+          bookmark.line += lineDelta;
+        } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
+          // The bookmarked line was changed, update its content
+          bookmark.content = e.document.lineAt(bookmark.line).text.trim();
+        }
+      }
+      return bookmark;
+    });
+
+    // Remove bookmarks that are no longer valid
+    this.bookmarks = this.bookmarks.filter(bookmark => {
+      if (bookmark.path === e.document.uri.fsPath) {
+        return bookmark.line < e.document.lineCount && bookmark.content === e.document.lineAt(bookmark.line).text.trim();
+      }
+      return true;
+    });
+  }
+
+  this.saveBookmarks();
+  this.refresh();
+}

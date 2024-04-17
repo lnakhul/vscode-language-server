@@ -346,3 +346,33 @@ private async findInArea(area: BookmarkAreaElement, bookmark: Bookmark): Promise
   }
   return undefined;
 }
+
+
+def handle_removeBookmark(self, ctx, bookmark_to_remove: Dict) -> bool:
+    """Removes a specific bookmark from the bookmarks object stored in Sandra."""
+    try:
+        # Fetch existing bookmarks from the database
+        bookmarks_path = self._bookmark_path()
+        obj = read_or_new_pymodule(self.db, bookmarks_path)
+        if obj.text:
+            bookmarks = eval(obj.text)
+        else:
+            bookmarks = []
+
+        # Filter out the bookmark to be removed
+        bookmarks = [bm for bm in bookmarks if not (bm['path'] == bookmark_to_remove['path'] and bm['line'] == bookmark_to_remove['line'])]
+
+        # Save the updated list of bookmarks back to the database
+        obj.text = repr(bookmarks)
+        obj.write()
+        self.db.commit()  # Ensure the transaction is saved
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to remove bookmark: {str(e)}")
+        return False
+
+def _bookmark_path(self):
+    """Constructs the bookmarks storage path within the Sandra database."""
+    return f"{self.bookmark_dir}/bookmarks.py"
+

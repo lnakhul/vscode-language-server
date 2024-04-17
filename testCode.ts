@@ -265,3 +265,45 @@ private async updateBookmarksInDB(updatedBookmarks: Bookmark[]): Promise<void> {
     vscode.window.showErrorMessage('Failed to update bookmarks in Sandra: ' + error.message);
   }
 }
+
+
+private async removeBookmarkElement(bookmarkElement: BookmarkLineElement | BookmarkFileElement | BookmarkAreaElement): Promise<void> {
+    // Remove from the local model
+    if (bookmarkElement instanceof BookmarkLineElement) {
+        const parentElement = bookmarkElement.parent as BookmarkFileElement;
+        const index = parentElement.children.findIndex(b => b === bookmarkElement);
+        if (index !== -1) {
+            parentElement.children.splice(index, 1);
+        }
+    } else if (bookmarkElement instanceof BookmarkFileElement) {
+        const areaElement = bookmarkElement.parent as BookmarkAreaElement;
+        areaElement.children = areaElement.children.filter(child => child !== bookmarkElement);
+    } else if (bookmarkElement instanceof BookmarkAreaElement) {
+        // This would remove an entire area with all its bookmarks
+        this.bookmarks = this.bookmarks.filter(b => b.path.startsWith(bookmarkElement.bookmarkItem.path));
+    }
+
+    // Perform any additional cleanup or UI updates needed
+    this.refreshDataTree(); // Refresh the tree view to reflect changes
+
+    // Optionally, update the backend or storage if necessary
+    await this.saveBookmarks(); // Assume saveBookmarks updates the backend or local storage
+}
+
+findBookmarkElement(bookmark: Bookmark): AbstractTreeBaseNode | undefined {
+    // Assuming each BookmarkAreaElement represents a directory, and each BookmarkFileElement represents a file
+    let areaElement = this.bookmarkAreas.find(area => bookmark.path.startsWith(area.bookmarkItem.path));
+    if (!areaElement) return undefined; // If no area contains this path, it's not represented in the tree
+
+    // Find the specific file element within the area
+    let fileElement = areaElement.children.find(file => file.bookmark.path === bookmark.path);
+    if (!fileElement) return areaElement; // Return the area element if no specific file is found
+
+    // If it's a line bookmark, find the specific line element
+    if (bookmark.type === 'line') {
+        return fileElement.children.find(line => line.bookmark.line === bookmark.line);
+    }
+
+    return fileElement;
+}
+

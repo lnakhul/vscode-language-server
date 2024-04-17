@@ -324,3 +324,25 @@ private async findBookmarkElement(bookmark: Bookmark): Promise<BookmarkLineEleme
   return undefined;
 }
 
+private async findBookmarkElement(bookmark: Bookmark): Promise<BookmarkLineElement | BookmarkFileElement | BookmarkAreaElement | undefined> {
+  const children = await this.children;
+  for (const area of children) {
+    const fileElement = await this.findInArea(area, bookmark);
+    if (fileElement) {
+      return fileElement;
+    }
+  }
+  return undefined;
+}
+
+private async findInArea(area: BookmarkAreaElement, bookmark: Bookmark): Promise<BookmarkLineElement | BookmarkFileElement | undefined> {
+  for (const file of await area.getChildren()) {
+    if (file instanceof BookmarkFileElement) {
+      const lineElement = file.children.find(line => line.bookmark.path === bookmark.path && line.bookmark.line === bookmark.line);
+      if (lineElement) {
+        return lineElement;
+      }
+    }
+  }
+  return undefined;
+}

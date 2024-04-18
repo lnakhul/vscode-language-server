@@ -376,3 +376,43 @@ def _bookmark_path(self):
     """Constructs the bookmarks storage path within the Sandra database."""
     return f"{self.bookmark_dir}/bookmarks.py"
 
+
+
+def handle_removeBookmark(self, ctx, bookmark_to_remove: Dict) -> bool:
+    try:
+        bookmarks = self.getBookmarks()
+
+        # Flatten the nested list of bookmarks if necessary
+        flat_bookmarks = self.flatten_bookmarks(bookmarks)
+
+        logger.info(f"Flat bookmarks before removal: {flat_bookmarks}")
+
+        updated_bookmarks = [
+            bm for bm in flat_bookmarks
+            if 'path' in bm and 'line' in bm
+            if not (bm['path'] == bookmark_to_remove['path'] and bm['line'] == bookmark_to_remove['line'])
+        ]
+        
+        logger.info(f"Bookmarks after removal: {updated_bookmarks}")
+
+        if len(flat_bookmarks) == len(updated_bookmarks):
+            return False  # No bookmark was removed, return False
+
+        # Convert back to nested structure if necessary, or adjust the save function
+        # to handle flat lists
+        self._save_bookmarks(updated_bookmarks)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to remove bookmark: {str(e)}")
+        return False
+
+def flatten_bookmarks(self, bookmarks):
+    """Flatten a list of possibly nested lists of bookmarks."""
+    flat_list = []
+    for item in bookmarks:
+        if isinstance(item, list):
+            flat_list.extend(self.flatten_bookmarks(item))  # Recursively flatten the list
+        else:
+            flat_list.append(item)
+    return flat_list
+

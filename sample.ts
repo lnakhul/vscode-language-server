@@ -318,4 +318,32 @@ test('Test Add Bookmark', async () => {
     expect(lineElement.length).toBe(1);
     expect(lineElement[0].bookmark).toEqual(bookmark);
 });
-                                 
+
+
+    test('Update Bookmark on Document Change', async () => {
+        const documentUri = vscode.Uri.file('/a/b/c/d.py');
+        const documentChange = {
+            document: { uri: documentUri },
+            contentChanges: [{ range: new vscode.Range(0, 0, 0, 0), text: 'new content' }]
+        };
+        const bookmark: Bookmark = { type: 'line', path: '/a/b/c/d.py', line: 1, content: 'original content' };
+        bookmarkDataProvider.bookmarks.push(bookmark);
+        bookmarkDataProvider.handleDocumentChange(documentChange);
+        expect(bookmark.content).toBe('new content');
+
+        // Test the bookmark is correctly updated in the tree
+        const root = await bookmarkDataProvider.getChildren(areaElement);
+        expect(root).toBeDefined();
+        expect(root.length).toBe(1);
+
+        const fileElement = await bookmarkDataProvider.getChildren(root[0]);
+        expect(fileElement).toBeDefined();
+
+        const lineElement = await bookmarkDataProvider.getChildren(fileElement[0]);
+        expect(lineElement).toBeDefined();
+        expect(lineElement.length).toBe(1);
+
+        const lineElementChildren = await bookmarkDataProvider.getChildren(lineElement[0]);
+        expect(lineElementChildren).toBeDefined();
+        expect(lineElementChildren.length).toBe(0);
+    });

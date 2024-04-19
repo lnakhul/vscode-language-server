@@ -278,25 +278,44 @@ test('Test Bookmark data provider', async () => {
     expect(treeItem.label).toBe(fileElement.label);
 });
 
-test('Add Bookmark', async () => {
-    // Setup the mock for the proxyManager's sendRequest method
-    proxyManager.sendRequest.mockResolvedValue(true);
+test('Test Add Bookmark', async () => {
+    // Mock the active text editor
+    const mockTextEditor = {
+        document: {
+            uri: vscode.Uri.file(bookmark.path),
+            lineAt: jest.fn().mockReturnValue({ text: bookmark.content }),
+        },
+        selection: { active: { line: bookmark.line - 1 } },
+    };
+    vscode.window.activeTextEditor = mockTextEditor;
 
-    // Simulate adding a bookmark
-    await bookmarksDataProvider.addBookmark();
+    // Call the addBookmark method
+    await bookmarkDataProvider.addBookmark();
 
-    // Expect sendRequest to have been called with the correct parameters
+    // Expect sendRequest to have been called correctly for adding
     expect(proxyManager.sendRequest).toHaveBeenCalledWith(null, 'bookmark:addBookmark', expect.objectContaining({
-      path: bookmarkToAdd.path,
-      line: bookmarkToAdd.line,
-      content: bookmarkToAdd.content
+        path: bookmark.path,
+        line: bookmark.line,
+        content: bookmark.content
     }));
 
-    // Verify that the internal bookmarks array has been updated
-    expect(bookmarksDataProvider.bookmarks.includes(bookmarkToAdd)).toBeTruthy();
+    const bookmarks = await bookmarkDataProvider.getBookmark(bookmark.path);
+    expect(bookmarks).toContainEqual(bookmark);
 
-    // Optionally check if the UI tree has been updated
-    const children = await bookmarksDataProvider.getChildren();
-    expect(children.some(node => node.bookmark.path === bookmarkToAdd.path && node.bookmark.line === bookmarkToAdd.line)).toBeTruthy();
-  });
+    // Test the bookmark is correctly added to the tree
+    const root = await bookmarkDataProvider.getChildren();
+    expect(root).toBeDefined();
+    expect(root.length).toBe(1);
+    expect(root[0].bookmark).toEqual(bookmark);
+
+    const fileElement = await bookmarkDataProvider.getChildren(root[0]);
+    expect(fileElement).toBeDefined();
+    expect(fileElement.length).toBe(1);
+    expect(fileElement[0].bookmark).toEqual(bookmark);
+
+    const lineElement = await bookmarkDataProvider.getChildren(fileElement[0]);
+    expect(lineElement).toBeDefined();
+    expect(lineElement.length).toBe(1);
+    expect(lineElement[0].bookmark).toEqual(bookmark);
+});
                                  

@@ -455,3 +455,29 @@ def _bookmark_path(self, bookmark: Dict) -> str:
         except Exception as e:
             logger.error(f"Failed to remove bookmark: {str(e)}")
             return False
+
+
+
+def handle_addBookmark(self, ctx, bookmark: Dict) -> bool:
+    """Adds a bookmark to the bookmarks list."""
+    if isinstance(bookmark, list):
+        bookmarks = self.flatten_bookmarks(bookmark)
+        for bookmark in bookmarks:
+            if not isinstance(bookmark, dict):
+                raise TypeError('bookmark must be a dictionary')
+            if 'path' not in bookmark:
+                raise ValueError('bookmark must have a path key')
+            bm_path = self._bookmark_path(bookmark)
+            obj = read_or_new_pymodule(self.db, bm_path)
+            obj.text = repr(bookmark)
+            obj.write()
+    else:
+        if not isinstance(bookmark, dict):
+            raise TypeError('bookmark must be a dictionary')
+        if 'path' not in bookmark:
+            raise ValueError('bookmark must have a path key')
+        bm_path = self._bookmark_path(bookmark)
+        obj = read_or_new_pymodule(self.db, bm_path)
+        obj.text = repr(bookmark)
+        obj.write()
+    return True

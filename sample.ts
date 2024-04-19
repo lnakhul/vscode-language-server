@@ -230,29 +230,52 @@ describe('BookmarkFileElement', () => {
     const uri = vscode.Uri.parse('quartz-bookmark-view://file/test.txt
 
 
+import { Bookmark, BookmarkAreaElement, BookmarkFileElement, BookmarkLineElement, BookmarksDataProvider } from './bookmarkExplorer';
+import { ProxyManager, ProxyProcessState } from './proxyManager';
 
-                    test('Test Bookmark data provider', async () => {
-    const dataProvider = new BookmarksDataProvider(proxyManager, sourceLocator);
-    expect(dataProvider).toBeDefined();
+test('Test Bookmark data provider', async () => {
+    // Mock the ProxyManager
+    const proxyManager = {
+        state: ProxyProcessState.Connected,
+        sendRequest: jest.fn(),
+    } as unknown as ProxyManager;
+
+    // Create the data provider
+    const dataProvider = new BookmarksDataProvider(proxyManager, 'testId');
+
+    // Create a bookmark and its corresponding elements
+    const bookmark: Bookmark = {
+        type: 'file',
+        path: 'test/path',
+        line: 1,
+        name: 'Test Bookmark',
+        content: 'Test Content',
+    };
+    const lineElement = new BookmarkLineElement(bookmark);
+    const fileElement = new BookmarkFileElement(bookmark, { id: 'file', color: { id: 'blue' } });
+    fileElement.children.push(lineElement);
+    const areaElement = new BookmarkAreaElement(bookmark);
+    areaElement.children.push(fileElement);
 
     // Test getChildren method
-    const rootChildren = await dataProvider.getChildren();
-    expect(rootChildren).toBeDefined();
-    expect(rootChildren.length).toBe(0); // Assuming no bookmarks at the start
+    let children = await dataProvider.getChildren(areaElement);
+    expect(children).toBeDefined();
+    expect(children.length).toBe(1);
+    expect(children[0]).toBe(fileElement);
 
-    // Test addBookmark and getChildren for non-root node
-    const explorer = new BookmarkExplorer(proxyManager, sourceLocator);
-    await explorer.addBookmark(bookmark);
-    const bookmarkAreaElement = new BookmarkAreaElement("Test Area", explorer);
-    const areaChildren = await dataProvider.getChildren(bookmarkAreaElement);
-    expect(areaChildren).toBeDefined();
-    expect(areaChildren.length).toBe(1);
-    expect(areaChildren[0].bookmark).toBe(bookmark);
+    children = await dataProvider.getChildren(fileElement);
+    expect(children).toBeDefined();
+    expect(children.length).toBe(1);
+    expect(children[0]).toBe(lineElement);
 
     // Test getTreeItem method
-    const treeItem = dataProvider.getTreeItem(areaChildren[0]);
+    let treeItem = dataProvider.getTreeItem(areaElement);
     expect(treeItem).toBeDefined();
-    expect(treeItem.label).toBe(bookmark.name);
+    expect(treeItem.label).toBe(areaElement.id);
+
+    treeItem = dataProvider.getTreeItem(fileElement);
+    expect(treeItem).toBeDefined();
+    expect(treeItem.label).toBe(fileElement.label);
 });
 
 

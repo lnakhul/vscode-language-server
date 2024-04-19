@@ -416,3 +416,42 @@ def flatten_bookmarks(self, bookmarks):
             flat_list.append(item)
     return flat_list
 
+
+def _bookmark_path(self, bookmark: Dict) -> str:
+        """Constructs the bookmark storage path based on its parent directory, filename, and line number."""
+        # Extract the parent directory name and filename from the path
+        path = pathlib.Path(bookmark['path'])
+        parent_dir_name = path.parent.name
+        filename = path.name
+        # Replace any characters that are not valid in filenames with '_'
+        safe_name = f"{parent_dir_name}_{filename}".replace('/', '_').replace('\\', '_')
+        return f"{self.bookmark_dir}/{safe_name}_{bookmark['line']}"
+
+    def handle_addBookmark(self, ctx, bookmark: Dict) -> bool:
+        """Adds a bookmark to the bookmarks list."""
+        bm_path = self._bookmark_path(bookmark)
+        obj = read_or_new_pymodule(self.db, bm_path)
+        obj.text = repr(bookmark)
+        obj.write()
+        return True
+    
+    def getBookmarks(self) -> List[Dict]:
+        """
+        Retrieves all bookmarks from Sandra, including their metadata.
+        """
+        bookmarks = []
+        for bm_path in sandra.walk(self.bookmark_dir, db=self.db, returnDirs=False):
+            obj = read_or_new_pymodule(self.db, bm_path)
+            bookmarks.append(eval(obj.text))
+        return bookmarks
+
+    def handle_removeBookmark(self, ctx, bookmark_to_remove: Dict) -> bool:
+        """Removes a bookmark from the bookmarks list."""
+        try:
+            bm_path = self._bookmark_path(bookmark_to_remove)
+            obj = read_or_new_pymodule(self.db, bm_path)
+            obj.delete()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove bookmark: {str(e)}")
+            return False

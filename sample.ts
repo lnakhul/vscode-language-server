@@ -229,3 +229,31 @@ describe('BookmarkFileElement', () => {
   it('should create file decoration with number of bookmarks', () => {
     const uri = vscode.Uri.parse('quartz-bookmark-view://file/test.txt
 
+
+
+                    test('Test Bookmark data provider', async () => {
+    const dataProvider = new BookmarksDataProvider(proxyManager, sourceLocator);
+    expect(dataProvider).toBeDefined();
+
+    // Test getChildren method
+    const rootChildren = await dataProvider.getChildren();
+    expect(rootChildren).toBeDefined();
+    expect(rootChildren.length).toBe(0); // Assuming no bookmarks at the start
+
+    // Test addBookmark and getChildren for non-root node
+    const explorer = new BookmarkExplorer(proxyManager, sourceLocator);
+    await explorer.addBookmark(bookmark);
+    const bookmarkAreaElement = new BookmarkAreaElement("Test Area", explorer);
+    const areaChildren = await dataProvider.getChildren(bookmarkAreaElement);
+    expect(areaChildren).toBeDefined();
+    expect(areaChildren.length).toBe(1);
+    expect(areaChildren[0].bookmark).toBe(bookmark);
+
+    // Test getTreeItem method
+    const treeItem = dataProvider.getTreeItem(areaChildren[0]);
+    expect(treeItem).toBeDefined();
+    expect(treeItem.label).toBe(bookmark.name);
+});
+
+
+                                 

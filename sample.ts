@@ -347,3 +347,16 @@ test('Test Add Bookmark', async () => {
         expect(lineElementChildren).toBeDefined();
         expect(lineElementChildren.length).toBe(0);
     });
+
+      test('Test Load Bookmarks', async () => {
+        const bookmarks: Bookmark[] = [
+            { type: 'line', path: '/a/b/c/d.py', line: 1, content: 'content' },
+            { type: 'line', path: '/a/b/c/d.py', line: 2, content: 'content' },
+            { type: 'line', path: '/a/b/c/d.py', line: 3, content: 'content' },
+            { type: 'line', path: '/a/b/c/d.py', line: 4, content: 'content' },
+            { type: 'line', path: '/a/b/c/d.py', line: 5, content: 'content' },
+        ];
+        proxyManager.nextResponse<Bookmark[]>("bookmark:loadBookmarks", bookmarks);
+        await bookmarkDataProvider.loadBookmarks();
+        expect(bookmarkDataProvider.bookmarks).toEqual(bookmarks);
+    });

@@ -278,5 +278,25 @@ test('Test Bookmark data provider', async () => {
     expect(treeItem.label).toBe(fileElement.label);
 });
 
+test('Add Bookmark', async () => {
+    // Setup the mock for the proxyManager's sendRequest method
+    proxyManager.sendRequest.mockResolvedValue(true);
 
+    // Simulate adding a bookmark
+    await bookmarksDataProvider.addBookmark();
+
+    // Expect sendRequest to have been called with the correct parameters
+    expect(proxyManager.sendRequest).toHaveBeenCalledWith(null, 'bookmark:addBookmark', expect.objectContaining({
+      path: bookmarkToAdd.path,
+      line: bookmarkToAdd.line,
+      content: bookmarkToAdd.content
+    }));
+
+    // Verify that the internal bookmarks array has been updated
+    expect(bookmarksDataProvider.bookmarks.includes(bookmarkToAdd)).toBeTruthy();
+
+    // Optionally check if the UI tree has been updated
+    const children = await bookmarksDataProvider.getChildren();
+    expect(children.some(node => node.bookmark.path === bookmarkToAdd.path && node.bookmark.line === bookmarkToAdd.line)).toBeTruthy();
+  });
                                  

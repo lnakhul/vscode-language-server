@@ -481,3 +481,60 @@ def handle_addBookmark(self, ctx, bookmark: Dict) -> bool:
         obj.text = repr(bookmark)
         obj.write()
     return True
+
+
+async updateBookmark(oldBookmark: Bookmark, newBookmark: Bookmark): Promise<void> {
+  this.bookmarksLock = this.bookmarksLock.then(async () => {
+    const result = await this.proxyManager.sendRequest('bookmark:updateBookmark', newBookmark);
+    if (result) {
+      this.bookmarks = this.bookmarks.filter(b => b.path !== oldBookmark.path || b.line !== oldBookmark.line);
+      this.bookmarks.push(newBookmark);
+      await this.saveBookmarks();
+      const bookmarkAreas = await this.fetchBookmarkAreas();
+      bookmarkAreas.forEach(area => {
+        area.children.forEach(file => {
+          file.children = file.children.map(line => new BookmarkLineElement(line.bookmark));
+        });
+      });
+      this.refresh();
+    } else {
+      // If the update was not successful, show an error message
+      vscode.window.showErrorMessage('Failed to update bookmark.');
+    }
+  });
+}
+
+handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
+  for (const change of e.contentChanges) {
+    const startLine = change.range.start.line;
+    const endLine = change.range.end.line;
+    const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
+
+    this.bookmarksLock = this.bookmarksLock.then(() => {
+      this.bookmarks.forEach(async (bookmark, index) => {
+        if (bookmark.path === e.document.uri.fsPath) {
+          if (bookmark.line >= startLine) {
+            // The bookmarked line was changed, update its content
+            const newContent = e.document.lineAt(bookmark.line).text.trim();
+            // Line number has changed, update it
+            const oldLine = bookmark.line;
+            const newLine = oldLine + lineDelta;
+            if (newLine !== oldLine || bookmark.content !== newContent) {
+              // The bookmark has changed, update it
+              const newBookmark = { ...bookmark, line: newLine, content: newContent };
+              // Update the bookmark in the bookmarks array immediately
+              this.bookmarks[index] = newBookmark;
+              try {
+                await this.updateBookmark(bookmark, newBookmark);
+              } catch (error) {
+                // If the update failed, revert the changes in the bookmarks array
+                this.bookmarks[index] = bookmark;
+              }
+            }
+          }
+        }
+      });
+      this.refresh(); // Refresh the tree view after handling document change
+    });
+  }
+}

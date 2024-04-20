@@ -538,3 +538,64 @@ handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
     });
   }
 }
+
+
+private async fetchBookmarkAreas(): Promise<BookmarkAreaElement[]> {
+  const areasMap = this.createAreasMap();
+  const fileMap = this.createFileMap();
+
+  this.sortAreasAndFiles(areasMap);
+
+  return Array.from(areasMap.values());
+}
+
+private createAreasMap(): Map<string, BookmarkAreaElement> {
+  const areasMap = new Map<string, BookmarkAreaElement>();
+
+  this.bookmarks.forEach(bookmark => {
+    if (!bookmark.path) {
+      console.error('Bookmark is missing path:', bookmark);
+      return;
+    }
+
+    const dirPath = pathModule.dirname(bookmark.path);
+    let areaElement = areasMap.get(dirPath);
+    if (!areaElement) {
+      areaElement = new BookmarkAreaElement({type: 'folder', path: dirPath, line: 0}, undefined);
+      areaElement.id = dirPath;
+      areasMap.set(dirPath, areaElement);
+    }
+  });
+
+  return areasMap;
+}
+
+private createFileMap(): Map<string, BookmarkFileElement> {
+  const fileMap = new Map<string, BookmarkFileElement>();
+
+  this.bookmarks.forEach(bookmark => {
+    let fileElement = fileMap.get(bookmark.path);
+    if (!fileElement) {
+      fileElement = new BookmarkFileElement(bookmark, this.fileIcon);
+      fileMap.set(bookmark.path, fileElement);
+    }
+
+    const lineElement = new BookmarkLineElement(bookmark);
+    lineElement.parent = fileElement;
+    fileElement.children.push(lineElement);
+    fileElement.children.sort((a, b) => a.bookmark.line - b.bookmark.line);
+  });
+
+  return fileMap;
+}
+
+private sortAreasAndFiles(areasMap: Map<string, BookmarkAreaElement>): void {
+  // Sort the areas by path
+  const areasArray = Array.from(areasMap.values());
+  areasArray.sort((a, b) => a.bookmarkItem.path.localeCompare(b.bookmarkItem.path));
+
+  // Sort the file elements within each area
+  areasArray.forEach(area => {
+    area.children.sort((a, b) => a.bookmark.path.localeCompare(b.bookmark.path));
+  });
+}

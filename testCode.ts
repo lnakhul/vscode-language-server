@@ -599,3 +599,36 @@ private sortAreasAndFiles(areasMap: Map<string, BookmarkAreaElement>): void {
     area.children.sort((a, b) => a.bookmark.path.localeCompare(b.bookmark.path));
   });
 }
+
+
+// Event handler for document changes
+handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
+  e.contentChanges.forEach(change => {
+    const startLine = change.range.start.line + 1; // Convert to 1-based index
+    const endLine = change.range.end.line + 1;
+    const lineDelta = change.text.split('\n').length - (endLine - startLine);
+
+    this.bookmarks.forEach((bookmark, index) => {
+      if (bookmark.path === e.document.uri.fsPath && bookmark.line >= startLine) {
+        const newLine = bookmark.line + lineDelta;
+        const newContent = e.document.lineAt(newLine - 1).text.trim(); // Adjust for zero-based index
+
+        // Only proceed if there's a change to update
+        if (bookmark.line !== newLine || bookmark.content !== newContent) {
+          const oldBookmark = {...bookmark};
+          const updatedBookmark = {...bookmark, line: newLine, content: newContent};
+
+          // Perform the update asynchronously
+          this.updateBookmark(oldBookmark, updatedBookmark).then(() => {
+            this.bookmarks[index] = updatedBookmark; // Confirm the update on success
+          }).catch(error => {
+            console.error("Failed to update bookmark:", error);
+            vscode.window.showErrorMessage("Failed to update bookmark due to an error.");
+          });
+        }
+      }
+    });
+  });
+  this.refresh(); // Refresh to update the UI if needed
+}
+

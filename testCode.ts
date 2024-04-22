@@ -632,3 +632,33 @@ handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
   this.refresh(); // Refresh to update the UI if needed
 }
 
+
+def handle_updateBookmark(self, ctx, old_bookmark: Dict, updated_bookmark: Dict) -> bool:
+    """Updates a bookmark in the bookmarks list."""
+    try:
+        # Construct paths for old and new bookmarks
+        old_path = self._bookmark_path(old_bookmark)
+        updated_path = self._bookmark_path(updated_bookmark)
+
+        # Read or create the module for the updated bookmark
+        updated_obj = read_or_new_pymodule(self.db, updated_path)
+
+        if old_path != updated_path:
+            # Attempt to delete the old bookmark if the path changes
+            old_obj = read_or_new_pymodule(self.db, old_path)
+            old_obj.delete()
+
+        # Write the updated bookmark
+        updated_obj.text = repr(updated_bookmark)
+        updated_obj.write()
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to update bookmark: {str(e)}")
+        # Attempt to revert changes by deleting any partially written updates
+        try:
+            updated_obj.delete()
+        except Exception as revert_error:
+            logger.error(f"Failed to revert update: {str(revert_error)}")
+        return False
+

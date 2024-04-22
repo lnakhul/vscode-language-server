@@ -634,35 +634,37 @@ handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
 
 
 async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
-  const updatedBookmarks: Bookmark[] = [];
   for (const change of e.contentChanges) {
     const startLine = change.range.start.line;
     const endLine = change.range.end.line;
     const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
 
-    for (const bookmark of this.bookmarks) {
-      if (bookmark.path === e.document.uri.fsPath) {
-        if (bookmark.line > startLine) {
-          // The bookmarked line is below the change, adjust its line number
-          const oldBookmark = { ...bookmark };
-          const newLine = bookmark.line + lineDelta;
-          const newContent = e.document.lineAt(newLine).text.trim();
-          const newBookmark = { ...bookmark, line: newLine, content: newContent };
-          updatedBookmarks.push(newBookmark);
-          await this.updateBookmark(oldBookmark, newBookmark);
-        } else {
-          // The bookmarked line is not affected by the change, keep it as is
-          updatedBookmarks.push(bookmark);
+    if (change.text === "") {
+      // This is a deletion
+      for (const bookmark of this.bookmarks) {
+        if (bookmark.path === e.document.uri.fsPath) {
+          if (bookmark.line > startLine) {
+            // The bookmarked line is below the deleted line(s), adjust its line number
+            bookmark.line += lineDelta;
+          } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
+            // The bookmarked line is within the deleted range, remove it
+            this.bookmarks = this.bookmarks.filter(b => b !== bookmark);
+          }
         }
-      } else {
-        // The bookmark is for a different file, keep it as is
-        updatedBookmarks.push(bookmark);
+      }
+    } else {
+      // This is not a deletion
+      for (const bookmark of this.bookmarks) {
+        if (bookmark.path === e.document.uri.fsPath && bookmark.line > startLine) {
+          // The bookmarked line is below the change, adjust its line number
+          bookmark.line += lineDelta;
+          bookmark.content = e.document.lineAt(bookmark.line).text.trim();
+        }
       }
     }
   }
 
-  // Replace the bookmarks array with the new array
-  this.bookmarks = updatedBookmarks;
+  // Refresh the tree view to reflect the changes
   this.refresh();
 }
 

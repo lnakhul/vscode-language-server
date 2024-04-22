@@ -633,60 +633,38 @@ handleDocumentChange(e: vscode.TextDocumentChangeEvent): void {
 }
 
 
-def handle_updateBookmark(self, ctx, old_bookmark: Dict, updated_bookmark: Dict) -> bool:
-    """Updates a bookmark in the bookmarks list."""
-    try:
-        # Construct paths for old and new bookmarks
-        old_path = self._bookmark_path(old_bookmark)
-        updated_path = self._bookmark_path(updated_bookmark)
+async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
+  const updatedBookmarks: Bookmark[] = [];
+  for (const change of e.contentChanges) {
+    const startLine = change.range.start.line;
+    const endLine = change.range.end.line;
+    const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
 
-        # Read or create the module for the updated bookmark
-        updated_obj = read_or_new_pymodule(self.db, updated_path)
+    for (const bookmark of this.bookmarks) {
+      if (bookmark.path === e.document.uri.fsPath) {
+        if (bookmark.line > startLine) {
+          // The bookmarked line is below the change, adjust its line number
+          const oldBookmark = { ...bookmark };
+          const newLine = bookmark.line + lineDelta;
+          const newContent = e.document.lineAt(newLine).text.trim();
+          const newBookmark = { ...bookmark, line: newLine, content: newContent };
+          updatedBookmarks.push(newBookmark);
+          await this.updateBookmark(oldBookmark, newBookmark);
+        } else {
+          // The bookmarked line is not affected by the change, keep it as is
+          updatedBookmarks.push(bookmark);
+        }
+      } else {
+        // The bookmark is for a different file, keep it as is
+        updatedBookmarks.push(bookmark);
+      }
+    }
+  }
 
-        if old_path != updated_path:
-            # Attempt to delete the old bookmark if the path changes
-            old_obj = read_or_new_pymodule(self.db, old_path)
-            old_obj.delete()
-
-        # Write the updated bookmark
-        updated_obj.text = repr(updated_bookmark)
-        updated_obj.write()
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to update bookmark: {str(e)}")
-        # Attempt to revert changes by deleting any partially written updates
-        try:
-            updated_obj.delete()
-        except Exception as revert_error:
-            logger.error(f"Failed to revert update: {str(revert_error)}")
-        return False
-
-
-/**
- * Updates a bookmark both locally and on the server.
- * @param {Bookmark} oldBookmark - The original bookmark before updates.
- * @param {Bookmark} newBookmark - The updated bookmark with new values.
- * @returns {Promise<void>} A promise that resolves if the update is successful, otherwise rejects.
- */
-updateBookmark(oldBookmark, newBookmark) {
-    return new Promise((resolve, reject) => {
-        // Construct the request to the server
-        this.proxyManager.sendRequest('bookmark:updateBookmark', { oldBookmark, newBookmark })
-            .then(response => {
-                if (response.success) {
-                    // Optionally, update local state or trigger any side effects
-                    console.log('Bookmark updated successfully');
-                    resolve();
-                } else {
-                    console.error('Failed to update bookmark on the server:', response.error);
-                    reject(new Error('Server failed to update the bookmark.'));
-                }
-            })
-            .catch(error => {
-                console.error('Error updating bookmark:', error);
-                reject(new Error('Error communicating with the server.'));
-            });
-    });
+  // Replace the bookmarks array with the new array
+  this.bookmarks = updatedBookmarks;
+  this.refresh();
 }
+
+
 

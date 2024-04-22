@@ -637,35 +637,31 @@ async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
   for (const change of e.contentChanges) {
     const startLine = change.range.start.line;
     const endLine = change.range.end.line;
-    const lineDelta = change.text.split('\n').length - (endLine - startLine + 1);
+    const lineDelta = change.text.split('\n').length - 1 - (endLine - startLine);
 
-    if (change.text === "") {
-      // This is a deletion
-      for (const bookmark of this.bookmarks) {
-        if (bookmark.path === e.document.uri.fsPath) {
-          if (bookmark.line > startLine) {
-            // The bookmarked line is below the deleted line(s), adjust its line number
-            bookmark.line += lineDelta;
-          } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
-            // The bookmarked line is within the deleted range, remove it
-            this.bookmarks = this.bookmarks.filter(b => b !== bookmark);
+    this.bookmarks = this.bookmarks.map(bookmark => {
+      if (bookmark.path === e.document.uri.fsPath) {
+        if (bookmark.line > endLine) {
+          // The bookmark is below the change, adjust its line number
+          return { ...bookmark, line: bookmark.line + lineDelta };
+        } else if (bookmark.line >= startLine && bookmark.line <= endLine) {
+          // The bookmark is within the change
+          if (change.text === "") {
+            // The bookmark's line was deleted, remove the bookmark
+            return null;
+          } else {
+            // The bookmark's line was changed, update its content
+            return { ...bookmark, content: e.document.lineAt(bookmark.line).text.trim() };
           }
         }
       }
-    } else {
-      // This is not a deletion
-      for (const bookmark of this.bookmarks) {
-        if (bookmark.path === e.document.uri.fsPath && bookmark.line > startLine) {
-          // The bookmarked line is below the change, adjust its line number
-          bookmark.line += lineDelta;
-          bookmark.content = e.document.lineAt(bookmark.line).text.trim();
-        }
-      }
-    }
-  }
+      // The bookmark is not affected by the change
+      return bookmark;
+    }).filter(Boolean); // Remove null bookmarks
 
-  // Refresh the tree view to reflect the changes
-  this.refresh();
+    // Refresh the tree view to reflect the changes
+    this.refresh();
+  }
 }
 
 

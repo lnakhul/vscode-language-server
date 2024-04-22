@@ -662,3 +662,31 @@ def handle_updateBookmark(self, ctx, old_bookmark: Dict, updated_bookmark: Dict)
             logger.error(f"Failed to revert update: {str(revert_error)}")
         return False
 
+
+/**
+ * Updates a bookmark both locally and on the server.
+ * @param {Bookmark} oldBookmark - The original bookmark before updates.
+ * @param {Bookmark} newBookmark - The updated bookmark with new values.
+ * @returns {Promise<void>} A promise that resolves if the update is successful, otherwise rejects.
+ */
+updateBookmark(oldBookmark, newBookmark) {
+    return new Promise((resolve, reject) => {
+        // Construct the request to the server
+        this.proxyManager.sendRequest('bookmark:updateBookmark', { oldBookmark, newBookmark })
+            .then(response => {
+                if (response.success) {
+                    // Optionally, update local state or trigger any side effects
+                    console.log('Bookmark updated successfully');
+                    resolve();
+                } else {
+                    console.error('Failed to update bookmark on the server:', response.error);
+                    reject(new Error('Server failed to update the bookmark.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error updating bookmark:', error);
+                reject(new Error('Error communicating with the server.'));
+            });
+    });
+}
+

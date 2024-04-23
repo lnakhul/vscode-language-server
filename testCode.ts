@@ -738,3 +738,12 @@ async removeBookmark(): Promise<void> {
         vscode.window.showInformationMessage('No bookmark exists at the selected line.');
     }
 }
+
+vscode.window.onDidChangeTextEditorSelection(event => {
+    const hasBookmark = this.bookmarks.some(b => 
+        b.path === event.textEditor.document.uri.fsPath &&
+        b.line === event.selections[0].start.line + 1
+    );
+    vscode.commands.executeCommand('setContext', 'bookmarkExistsOnLine', hasBookmark);
+});
+

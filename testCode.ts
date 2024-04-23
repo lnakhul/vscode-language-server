@@ -721,4 +721,20 @@ getOrCreateDecorationTypeForBookmark(bookmark: Bookmark): vscode.TextEditorDecor
     return decorationType;
 }
 
+async removeBookmark(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
 
+    const line = editor.selection.active.line;
+    const filePath = editor.document.uri.fsPath;
+
+    // Find if there's a bookmark at the selected line
+    const bookmarkToRemove = this.bookmarks.find(b => b.path === filePath && b.line === line + 1);
+
+    if (bookmarkToRemove) {
+        // If a bookmark exists at this line, proceed to remove it
+        await this.executeRemoveBookmark(bookmarkToRemove);
+    } else {
+        vscode.window.showInformationMessage('No bookmark exists at the selected line.');
+    }
+}

@@ -666,3 +666,59 @@ async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
 
 
 
+
+
+updateDecorations(editor: vscode.TextEditor): void {
+    if (!editor) {
+        return;
+    }
+
+    // Clear existing decorations for this editor to prevent duplicates
+    const filePath = editor.document.uri.fsPath;
+    this.clearEditorDecorations(editor);
+
+    // Apply decorations for all bookmarks related to this editor's document
+    this.bookmarks.forEach((bookmark) => {
+        if (bookmark.path === filePath) {
+            const decorationType = this.getOrCreateDecorationTypeForBookmark(bookmark);
+            const range = new vscode.Range(bookmark.line - 1, 0, bookmark.line - 1, 0);
+            editor.setDecorations(decorationType, [range]);
+        }
+    });
+}
+
+clearEditorDecorations(editor: vscode.TextEditor): void {
+    const filePath = editor.document.uri.fsPath;
+    const keysToRemove = [];
+
+    // Find all decorations for the current editor's file path
+    for (let key of this.bookmarkDecorations.keys()) {
+        if (key.startsWith(filePath)) {
+            keysToRemove.push(key);
+        }
+    }
+
+    // Dispose of the decorations and remove them from the map
+    for (let key of keysToRemove) {
+        this.bookmarkDecorations.get(key)?.dispose();
+        this.bookmarkDecorations.delete(key);
+    }
+}
+
+getOrCreateDecorationTypeForBookmark(bookmark: Bookmark): vscode.TextEditorDecorationType {
+    const key = `${bookmark.path}:${bookmark.line}`;
+    let decorationType = this.bookmarkDecorations.get(key);
+
+    // If a decoration doesn't already exist, create a new one
+    if (!decorationType) {
+        decorationType = vscode.window.createTextEditorDecorationType({
+            gutterIconPath: vscode.Uri.file(this.context.asAbsolutePath('resources/bookmark.svg')),
+            gutterIconSize: 'contain'
+        });
+        this.bookmarkDecorations.set(key, decorationType);
+    }
+
+    return decorationType;
+}
+
+

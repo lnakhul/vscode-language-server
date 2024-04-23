@@ -747,3 +747,19 @@ vscode.window.onDidChangeTextEditorSelection(event => {
     vscode.commands.executeCommand('setContext', 'bookmarkExistsOnLine', hasBookmark);
 });
 
+
+function handleTextEditorSelectionChange() {
+    vscode.window.onDidChangeTextEditorSelection(event => {
+        // Ensure we check the line where the cursor ends up, not just where it started.
+        const line = event.selections[0].start.line;
+        const filePath = event.textEditor.document.uri.fsPath;
+
+        const hasBookmark = this.bookmarks.some(b => 
+            b.path === filePath &&
+            b.line === line + 1 // +1 because your bookmarks are likely stored in a 1-based index
+        );
+
+        vscode.commands.executeCommand('setContext', 'bookmarkExistsOnLine', hasBookmark);
+    });
+}
+

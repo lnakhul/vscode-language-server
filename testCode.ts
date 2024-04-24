@@ -763,3 +763,32 @@ function handleTextEditorSelectionChange() {
     });
 }
 
+*register(): Generator<vscode.Disposable> {
+    // ...
+    yield vscode.commands.registerCommand('quartz.editBookmark', this.editBookmark, this);
+    // ...
+}
+
+async editBookmark(bookmarkElement: BookmarkLineElement): Promise<void> {
+    const oldBookmark = bookmarkElement.bookmark;
+    const newBookmark = { ...oldBookmark }; // Create a copy of the old bookmark
+
+    // Prompt the user to enter the new bookmark details
+    const newLine = await vscode.window.showInputBox({ prompt: 'Enter the new line number', value: String(oldBookmark.line) });
+    const newContent = await vscode.window.showInputBox({ prompt: 'Enter the new content', value: oldBookmark.content });
+
+    if (newLine !== undefined) newBookmark.line = Number(newLine);
+    if (newContent !== undefined) newBookmark.content = newContent;
+
+    // Send a request to the server to update the bookmark
+    const result = await this.proxyManager.sendRequest('bookmark:updateBookmark', { oldBookmark, newBookmark });
+
+    if (result) {
+        // Update the local state and refresh the tree view
+        this.bookmarks = this.bookmarks.map(bm => bm.path === oldBookmark.path && bm.line === oldBookmark.line ? newBookmark : bm);
+        await this.saveBookmarks();
+        this.refresh();
+    } else {
+        vscode.window.showErrorMessage('Failed to edit bookmark.');
+    }
+}

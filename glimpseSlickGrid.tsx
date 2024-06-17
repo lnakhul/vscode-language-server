@@ -124,3 +124,67 @@ export function GlimpseSearch({ initialData }: ReactViewProps<GlimpseSearchProps
 }
 
 renderIntoWebview(<GlimpseSearch initialData={window.initialData} key={window.id}></GlimpseSearch>);
+
+
+
+
+/* slickgrid-vscode-themes.css */
+
+/* Common SlickGrid Styles */
+.slickgrid-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Light Theme */
+.vscode-light .slickgrid-container {
+  --slickgrid-background: #ffffff;
+  --slickgrid-text-color: #000000;
+  --slickgrid-header-background: #f3f3f3;
+  --slickgrid-border-color: #e0e0e0;
+}
+
+/* Dark Theme */
+.vscode-dark .slickgrid-container {
+  --slickgrid-background: #1e1e1e;
+  --slickgrid-text-color: #d4d4d4;
+  --slickgrid-header-background: #3c3c3c;
+  --slickgrid-border-color: #454545;
+}
+
+/* High Contrast Light Theme */
+.vscode-high-contrast-light .slickgrid-container {
+  --slickgrid-background: #ffffff;
+  --slickgrid-text-color: #000000;
+  --slickgrid-header-background: #f3f3f3;
+  --slickgrid-border-color: #ff0000; /* Example color */
+}
+
+/* High Contrast Dark Theme */
+.vscode-high-contrast .slickgrid-container {
+  --slickgrid-background: #000000;
+  --slickgrid-text-color: #ffffff;
+  --slickgrid-header-background: #2c2c2c;
+  --slickgrid-border-color: #ff0000; /* Example color */
+}
+
+/* Applying the CSS variables to SlickGrid */
+.slickgrid-container .slick-header {
+  background-color: var(--slickgrid-header-background);
+  color: var(--slickgrid-text-color);
+}
+
+.slickgrid-container .slick-viewport,
+.slickgrid-container .slick-row {
+  background-color: var(--slickgrid-background);
+  color: var(--slickgrid-text-color);
+}
+
+.slickgrid-container .slick-cell {
+  border-right: 1px solid var(--slickgrid-border-color);
+}
+
+.slickgrid-container .slick-header-column {
+  border-right: 1px solid var(--slickgrid-border-color);
+}
+

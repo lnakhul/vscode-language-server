@@ -188,3 +188,34 @@ renderIntoWebview(<GlimpseSearch initialData={window.initialData} key={window.id
   border-right: 1px solid var(--slickgrid-border-color);
 }
 
+
+private _fuzzySearchPosition(text: string, match: string, offset: number): number {
+    const preText = text.substring(0, offset);
+    const postText = text.substring(offset);
+    
+    const preMatchPosition = preText.lastIndexOf(match);
+    const postMatchPosition = postText.indexOf(match);
+    
+    console.log(`preMatchPosition: ${preMatchPosition}, postMatchPosition: ${postMatchPosition}`);
+    
+    let position;
+    
+    if (preMatchPosition !== -1 && postMatchPosition !== -1) {
+        // Find which match is closer to the offset
+        const preDistance = offset - (preMatchPosition + match.length);
+        const postDistance = postMatchPosition;
+        
+        position = preDistance <= postDistance ? preMatchPosition : (offset + postMatchPosition);
+    } else if (preMatchPosition !== -1) {
+        position = preMatchPosition;
+    } else if (postMatchPosition !== -1) {
+        position = offset + postMatchPosition;
+    } else {
+        position = offset;
+    }
+    
+    console.log(`computed position: ${position}`);
+    
+    return position;
+}
+

@@ -219,3 +219,19 @@ private _fuzzySearchPosition(text: string, match: string, offset: number): numbe
     return position;
 }
 
+
+private _fuzzySearchPosition(text: string, match: string, offset: number): number {
+    let position = offset - match.length;
+    const offset0 = text.indexOf(match, position);
+    const offset1 = text.lastIndexOf(match, position + match.length);
+    if (offset0 == -1 && offset1 != -1) {
+        position = offset1;
+    } else if (offset0 != -1 && offset1 == -1) {
+        position = offset0;
+    } else if (offset0 != -1 && offset1 != -1) {
+        position = (offset0 - position) < (position - offset1) ? offset0 : offset1;
+    }
+    return position !== -1 ? position : offset;
+}
+
+

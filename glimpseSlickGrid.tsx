@@ -261,20 +261,25 @@ useEffect(() => {
 
 useEffect(() => {
     let updated = false;
+    // Assuming searchItemHistory and results are arrays of objects, but TypeScript doesn't know their structure.
     const newSearchItemHistory = searchItemHistory.map((searchItem) => {
-        if (typeof searchItem === 'object' && searchItem !== null && !searchItem.id) {
+        // Assert searchItem as an object with an optional id property.
+        const item = searchItem as { id?: string, [key: string]: any };
+        if (!item.id) {
             updated = true;
-            return { ...searchItem, id: uuidv4() };
+            return { ...item, id: uuidv4() };
         }
-        return searchItem;
+        return item;
     });
 
     const newResults = state.results.map((result) => {
-        if (!result.id) {
+        // Assert result as an object with an optional id property.
+        const item = result as { id?: string, [key: string]: any };
+        if (!item.id) {
             updated = true;
-            return { ...result, id: uuidv4() };
+            return { ...item, id: uuidv4() };
         }
-        return result;
+        return item;
     });
 
     if (updated) {

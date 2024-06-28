@@ -248,3 +248,12 @@ private _fuzzySearchPosition(text: string, match: string, offset: number, lineno
     return position;
 }
 
+
+
+useEffect(() => {
+        if (searchItemHistory.length > 0 && !state.hasUniqueIds) {
+            const newSearchItemHistory = searchItemHistory.map(searchItem => ({ ...searchItem, id: searchItem.id || uuidv4() }));
+            updatePreviousSearchHistory({ searchItemHistory: newSearchItemHistory, searchItemHistoryMapping });
+            updateState({ hasUniqueIds: true });
+        }
+    }, [searchItemHistory, searchItemHistoryMapping, state.hasUniqueIds]);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+Ki import React, { useEffect, useRef } from 'react';
 import 'slickgrid-react/dist/slickgrid-react.css';
 import { SlickGridReact } from 'slickgrid-react';
 
@@ -310,3 +310,34 @@ useEffect(() => {
 
         updatePreviousSearchHistory({ searchItemHistory, searchItemHistoryMapping: updatedSearchItemHistoryMapping });
     }, []);
+
+
+
+// Ensure unique ids for saved search history and results
+useEffect(() => {
+    let updated = false;
+
+    // Ensure each previous search item has a unique ID
+    const newSearchItemHistory = searchItemHistory.map((searchItem) => {
+        if (typeof searchItem === 'object' && searchItem !== null && !searchItem.id) {
+            updated = true;
+            return { ...searchItem, id: uuidv4() };
+        }
+        return searchItem;
+    });
+
+    // Ensure each result has a unique ID
+    const newResults = state.results.map((result) => {
+        if (!result.id) {
+            updated = true;
+            return { ...result, id: uuidv4() };
+        }
+        return result;
+    });
+
+    if (updated) {
+        updatePreviousSearchHistory({ searchItemHistory: newSearchItemHistory, searchItemHistoryMapping });
+        updateState({ results: newResults, hasUniqueIds: true });
+    }
+}, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);
+

@@ -258,40 +258,34 @@ useEffect(() => {
         }
     }, [searchItemHistory, searchItemHistoryMapping, state.hasUniqueIds]);
 
+-------------------------------------------------------------------------
 
-useEffect(() => {
-    let updated = false;
-    // Assuming searchItemHistory and results are arrays of objects, but TypeScript doesn't know their structure.
-    const newSearchItemHistory = searchItemHistory.map((searchItem) => {
-        // Assert searchItem as an object with an optional id property.
-        const item = searchItem as { id?: string, [key: string]: any };
-        if (!item.id) {
-            updated = true;
-            return { ...item, id: uuidv4() };
-        }
-        return item;
-    });
-
-    const newResults = state.results.map((result) => {
-        // Assert result as an object with an optional id property.
-        const item = result as { id?: string, [key: string]: any };
-        if (!item.id) {
-            updated = true;
-            return { ...item, id: uuidv4() };
-        }
-        return item;
-    });
-
-    if (updated) {
-        updatePreviousSearchHistory({ searchItemHistory: newSearchItemHistory, searchItemHistoryMapping });
-        updateState({ ...state, results: newResults, hasUniqueIds: true });
+  useEffect(() => {
+    const { results, hasUniqueIds } = state;
+    if (!hasUniqueIds && results.length > 0) {
+        const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
+        updateState({ results: resultsWithIds, hasUniqueIds: true });
     }
-}, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);
+}, [state.results, state.hasUniqueIds]);
 
 useEffect(() => {
-        const { results, hasUniqueIds } = state;
-        if (!hasUniqueIds && results.length > 0) {
-            const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
-            updateState({ results: resultsWithIds, hasUniqueIds: true });
+    const ensureUniqueIdsForPreviousResults = () => {
+        const { previousSearchHistory, updatePreviousSearchHistory } = usePersistentState<GlimpseSearchProps>('previousSearchTerms', initialData);
+        const { searchItemHistory, searchItemHistoryMapping } = previousSearchHistory;
+
+        if (searchItemHistory && searchItemHistory.length > 0) {
+            const updatedSearchHistory = searchItemHistory.map(item => {
+                if (item.results && item.results.length > 0) {
+                    const updatedResults = item.results.map(result => ({ ...result, id: result.id || uuidv4() }));
+                    return { ...item, results: updatedResults };
+                }
+                return item;
+            });
+
+            updatePreviousSearchHistory({ ...previousSearchHistory, searchItemHistory: updatedSearchHistory });
         }
-    }, [state]);
+    };
+
+    ensureUniqueIdsForPreviousResults();
+}, []);
+

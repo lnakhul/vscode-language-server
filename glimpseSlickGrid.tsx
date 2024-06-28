@@ -283,3 +283,30 @@ useEffect(() => {
         updatePreviousSearchHistory({ searchItemHistory, searchItemHistoryMapping: updatedSearchItemHistoryMapping });
     }, []);
 
+
+
+// Ensure unique ids for results that were saved before implementing slickgrid-react layout
+    useEffect(() => {
+        const { results, hasUniqueIds } = state;
+        if (!hasUniqueIds && results.length > 0) {
+            const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
+            updateState({ results: resultsWithIds, hasUniqueIds: true });
+        }
+    }, [state.results, state.hasUniqueIds]);
+
+    // Ensure unique ids for previous search results
+    useEffect(() => {
+        const updatedSearchItemHistoryMapping = { ...searchItemHistoryMapping };
+        for (const searchText in updatedSearchItemHistoryMapping) {
+            const savedResultsIndex = updatedSearchItemHistoryMapping[searchText];
+            if (typeof savedResultsIndex === 'number') {
+                const savedResults = searchItemHistory[savedResultsIndex];
+                if (savedResults && Array.isArray(savedResults)) {
+                    const updatedResults = savedResults.map(result => ({ ...result, id: result.id || uuidv4() }));
+                    searchItemHistory[savedResultsIndex] = updatedResults;
+                }
+            }
+        }
+
+        updatePreviousSearchHistory({ searchItemHistory, searchItemHistoryMapping: updatedSearchItemHistoryMapping });
+    }, []);

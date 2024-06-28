@@ -260,32 +260,28 @@ useEffect(() => {
 
 -------------------------------------------------------------------------
 
-  useEffect(() => {
-    const { results, hasUniqueIds } = state;
-    if (!hasUniqueIds && results.length > 0) {
-        const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
-        updateState({ results: resultsWithIds, hasUniqueIds: true });
-    }
-}, [state.results, state.hasUniqueIds]);
+  // Ensure unique ids for results that were saved before implementing slickgrid-react layout
+    useEffect(() => {
+        const { results, hasUniqueIds } = state;
+        if (!hasUniqueIds && results.length > 0) {
+            const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
+            updateState({ results: resultsWithIds, hasUniqueIds: true });
+        }
+    }, [state.results, state.hasUniqueIds]);
 
-useEffect(() => {
-    const ensureUniqueIdsForPreviousResults = () => {
-        const { previousSearchHistory, updatePreviousSearchHistory } = usePersistentState<GlimpseSearchProps>('previousSearchTerms', initialData);
-        const { searchItemHistory, searchItemHistoryMapping } = previousSearchHistory;
-
+    // Ensure unique ids for previous search results
+    useEffect(() => {
         if (searchItemHistory && searchItemHistory.length > 0) {
-            const updatedSearchHistory = searchItemHistory.map(item => {
-                if (item.results && item.results.length > 0) {
-                    const updatedResults = item.results.map(result => ({ ...result, id: result.id || uuidv4() }));
-                    return { ...item, results: updatedResults };
+            const updatedSearchItemHistory = searchItemHistory.map(searchText => {
+                const savedResults = searchItemHistoryMapping[searchText];
+                if (savedResults && savedResults.results.length > 0) {
+                    const updatedResults = savedResults.results.map(result => ({ ...result, id: result.id || uuidv4() }));
+                    return { ...savedResults, results: updatedResults };
                 }
-                return item;
+                return savedResults;
             });
 
-            updatePreviousSearchHistory({ ...previousSearchHistory, searchItemHistory: updatedSearchHistory });
+            updatePreviousSearchHistory({ ...previousSearchHistory, searchItemHistory: updatedSearchItemHistory });
         }
-    };
-
-    ensureUniqueIdsForPreviousResults();
-}, []);
+    }, []);
 

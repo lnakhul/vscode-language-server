@@ -257,3 +257,28 @@ useEffect(() => {
             updateState({ hasUniqueIds: true });
         }
     }, [searchItemHistory, searchItemHistoryMapping, state.hasUniqueIds]);
+
+
+useEffect(() => {
+    let updated = false;
+    const newSearchItemHistory = searchItemHistory.map((searchItem) => {
+        if (typeof searchItem === 'object' && searchItem !== null && !searchItem.id) {
+            updated = true;
+            return { ...searchItem, id: uuidv4() };
+        }
+        return searchItem;
+    });
+
+    const newResults = state.results.map((result) => {
+        if (!result.id) {
+            updated = true;
+            return { ...result, id: uuidv4() };
+        }
+        return result;
+    });
+
+    if (updated) {
+        updatePreviousSearchHistory({ searchItemHistory: newSearchItemHistory, searchItemHistoryMapping });
+        updateState({ ...state, results: newResults, hasUniqueIds: true });
+    }
+}, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);

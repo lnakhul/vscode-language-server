@@ -287,3 +287,11 @@ useEffect(() => {
         updateState({ ...state, results: newResults, hasUniqueIds: true });
     }
 }, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);
+
+useEffect(() => {
+        const { results, hasUniqueIds } = state;
+        if (!hasUniqueIds && results.length > 0) {
+            const resultsWithIds = results.map(result => ({ ...result, id: result.id || uuidv4() }));
+            updateState({ results: resultsWithIds, hasUniqueIds: true });
+        }
+    }, [state]);

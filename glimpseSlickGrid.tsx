@@ -271,17 +271,15 @@ useEffect(() => {
 
     // Ensure unique ids for previous search results
     useEffect(() => {
-        if (searchItemHistory && searchItemHistory.length > 0) {
-            const updatedSearchItemHistory = searchItemHistory.map(searchText => {
-                const savedResults = searchItemHistoryMapping[searchText];
-                if (savedResults && savedResults.results.length > 0) {
-                    const updatedResults = savedResults.results.map(result => ({ ...result, id: result.id || uuidv4() }));
-                    return { ...savedResults, results: updatedResults };
-                }
-                return savedResults;
-            });
-
-            updatePreviousSearchHistory({ ...previousSearchHistory, searchItemHistory: updatedSearchItemHistory });
+        const updatedSearchItemHistoryMapping = { ...searchItemHistoryMapping };
+        for (const searchText in updatedSearchItemHistoryMapping) {
+            const savedResults = updatedSearchItemHistoryMapping[searchText];
+            if (savedResults && savedResults.length > 0) {
+                const updatedResults = savedResults.map(result => ({ ...result, id: result.id || uuidv4() }));
+                updatedSearchItemHistoryMapping[searchText] = updatedResults;
+            }
         }
+
+        updatePreviousSearchHistory({ searchItemHistory, searchItemHistoryMapping: updatedSearchItemHistoryMapping });
     }, []);
 

@@ -342,85 +342,8 @@ useEffect(() => {
 }, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);
 
 
-// Validation function to add unique IDs if they are missing
-const validateSearchHistory = (state: GlimpseSearchProps) => {
-    const newSearchItemHistory = state.searchItemHistory.map((searchItem: any) => {
-        if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
-            return { ...searchItem, id: uuidv4() };
-        }
-        return searchItem;
-    });
-    return { ...state, searchItemHistory: newSearchItemHistory };
-};
-
-// Validation function to add unique IDs if they are missing in results
-const validateSearchState = (state: GlimpseSearchState) => {
-    const newResults = state.results.map((result) => {
-        if (!result.id) {
-            return { ...result, id: uuidv4() };
-        }
-        return result;
-    });
-    return { ...state, results: newResults };
-};
-
-/ Validation function to ensure unique IDs
-const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
-    let updated = false;
-
-    if ('searchItemHistory' in state) {
-        const searchItemHistory = state.searchItemHistory.map((searchItem: any) => {
-            if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
-                updated = true;
-                return { ...searchItem, id: uuidv4() };
-            }
-            return searchItem;
-        });
-        return { ...state, searchItemHistory, updated };
-    }
-
-    if ('results' in state) {
-        const results = state.results.map((result: SearchResult) => {
-            if (!result.id) {
-                updated = true;
-                return { ...result, id: uuidv4() };
-            }
-            return result;
-        });
-        return { ...state, results, updated };
-    }
-
-    return { ...state, updated };
-};
 
 
-const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
-    let updated = false;
-
-    if ('searchItemHistory' in state) {
-        const searchItemHistory = state.searchItemHistory.map((searchItem: any) => {
-            if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
-                updated = true;
-                return { ...searchItem, id: uuidv4() };
-            }
-            return searchItem;
-        });
-        return { ...state, searchItemHistory, updated } as GlimpseSearchProps & { updated: boolean };
-    }
-
-    if ('results' in state) {
-        const results = state.results.map((result: SearchResult) => {
-            if (!result.id) {
-                updated = true;
-                return { ...result, id: uuidv4() };
-            }
-            return result;
-        });
-        return { ...state, results, updated } as GlimpseSearchState & { updated: boolean };
-    }
-
-    return { ...state, updated };
-};
 
 const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
     let updated = false;
@@ -447,6 +370,37 @@ const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
         return { ...(state as GlimpseSearchState), results, updated };
     }
 
-    return { ...state, updated };
+    return { ...(state as GlimpseSearchProps & GlimpseSearchState), updated };
 };
+
+
+
+const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
+    let updated = false;
+
+    if ('searchItemHistory' in state) {
+        const searchItemHistory = state.searchItemHistory.map((searchItem: any) => {
+            if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
+                updated = true;
+                return { ...searchItem, id: uuidv4() };
+            }
+            return searchItem;
+        });
+        return { ...(state as GlimpseSearchProps), searchItemHistory, updated };
+    }
+
+    if ('results' in state) {
+        const results = state.results.map((result: SearchResult) => {
+            if (!result.id) {
+                updated = true;
+                return { ...result, id: uuidv4() };
+            }
+            return result;
+        });
+        return { ...(state as GlimpseSearchState), results, updated };
+    }
+
+    return { ...(state as GlimpseSearchProps & GlimpseSearchState), updated };
+};
+
 

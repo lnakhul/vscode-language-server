@@ -418,3 +418,16 @@ useEffect(() => {
 }, [previousSearchHistory, state, updatePreviousSearchHistory, updateState]);
 
 
+useEffect(() => {
+    const validateSearchHistory = ensureUniqueIds(previousSearchHistory) as GlimpseSearchProps & { updated: boolean };
+    if (validateSearchHistory.updated) {
+        const { updated, ...newSearchHistory } = validateSearchHistory;
+        updatePreviousSearchHistory(newSearchHistory);
+    }
+
+    const validateSearchState = ensureUniqueIds(state) as GlimpseSearchState & { updated: boolean };
+    if (validateSearchState.updated) {
+        const { updated, ...newSearchState } = validateSearchState;
+        updateState(newSearchState);
+    }
+}, [previousSearchHistory, state, updatePreviousSearchHistory, updateState]);

@@ -38,3 +38,19 @@ function validateSearchHistory(state: GlimpseSearchProps): GlimpseSearchProps {
     }
     return state;
 }
+
+
+// Function to validate and ensure unique IDs for previous search history
+const validateSearchHistory = (state: GlimpseSearchProps): GlimpseSearchProps => {
+    const searchItemHistoryMapping = state.searchItemHistory.reduce((acc: Record<string, number>, item, index) => {
+        acc[item] = index;
+        return acc;
+    }, {});
+    return { ...state, searchItemHistoryMapping };
+};
+
+// Function to validate and ensure unique IDs for search state results
+const validateSearchState = (state: GlimpseSearchState): GlimpseSearchState => {
+    const results = state.results.map((result, index) => ({ ...result, id: result.id || uuidv4() }));
+    return { ...state, results, hasUniqueIds: true };
+};

@@ -392,3 +392,33 @@ const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
 
     return { ...state, updated };
 };
+
+
+const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
+    let updated = false;
+
+    if ('searchItemHistory' in state) {
+        const searchItemHistory = state.searchItemHistory.map((searchItem: any) => {
+            if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
+                updated = true;
+                return { ...searchItem, id: uuidv4() };
+            }
+            return searchItem;
+        });
+        return { ...state, searchItemHistory, updated } as GlimpseSearchProps & { updated: boolean };
+    }
+
+    if ('results' in state) {
+        const results = state.results.map((result: SearchResult) => {
+            if (!result.id) {
+                updated = true;
+                return { ...result, id: uuidv4() };
+            }
+            return result;
+        });
+        return { ...state, results, updated } as GlimpseSearchState & { updated: boolean };
+    }
+
+    return { ...state, updated };
+};
+

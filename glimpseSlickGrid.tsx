@@ -431,3 +431,20 @@ useEffect(() => {
         updateState(newSearchState);
     }
 }, [previousSearchHistory, state, updatePreviousSearchHistory, updateState]);
+
+
+function validateSearchHistory(state: GlimpseSearchProps): GlimpseSearchProps {
+    let updated = false;
+    const newSearchItemHistory = state.searchItemHistory.map(item => {
+        if (!item.id) {
+            updated = true;
+            return { ...item, id: uuidv4() };
+        }
+        return item;
+    });
+
+    if (updated) {
+        return { ...state, searchItemHistory: newSearchItemHistory };
+    }
+    return state;
+}

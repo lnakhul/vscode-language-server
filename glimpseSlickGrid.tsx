@@ -404,7 +404,6 @@ const ensureUniqueIds = (state: GlimpseSearchProps | GlimpseSearchState) => {
 };
 
 
-
 useEffect(() => {
     const { searchItemHistoryMapping, ...rest } = previousSearchHistory;
     const validatedSearchHistory = ensureUniqueIds(rest) as GlimpseSearchProps & { updated: boolean };

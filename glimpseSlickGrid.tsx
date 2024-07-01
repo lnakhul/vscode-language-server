@@ -21,3 +21,20 @@ const validateSearchState = (state: GlimpseSearchState): GlimpseSearchState => {
     });
     return { ...state, results };
 };
+
+
+function validateSearchHistory(state: GlimpseSearchProps): GlimpseSearchProps {
+    let updated = false;
+    const newSearchItemHistory = state.searchItemHistory.map(item => {
+        if (!item.id) {
+            updated = true;
+            return { ...item, id: uuidv4() };
+        }
+        return item;
+    });
+
+    if (updated) {
+        return { ...state, searchItemHistory: newSearchItemHistory };
+    }
+    return state;
+}

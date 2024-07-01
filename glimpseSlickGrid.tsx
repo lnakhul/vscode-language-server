@@ -341,3 +341,25 @@ useEffect(() => {
     }
 }, [searchItemHistory, searchItemHistoryMapping, state.results, state.hasUniqueIds, updatePreviousSearchHistory, updateState]);
 
+
+// Validation function to add unique IDs if they are missing
+const validateSearchHistory = (state: GlimpseSearchProps) => {
+    const newSearchItemHistory = state.searchItemHistory.map((searchItem: any) => {
+        if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
+            return { ...searchItem, id: uuidv4() };
+        }
+        return searchItem;
+    });
+    return { ...state, searchItemHistory: newSearchItemHistory };
+};
+
+// Validation function to add unique IDs if they are missing in results
+const validateSearchState = (state: GlimpseSearchState) => {
+    const newResults = state.results.map((result) => {
+        if (!result.id) {
+            return { ...result, id: uuidv4() };
+        }
+        return result;
+    });
+    return { ...state, results: newResults };
+};

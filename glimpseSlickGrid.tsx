@@ -1,56 +1,22 @@
-const validateSearchHistory = (state: GlimpseSearchProps): GlimpseSearchProps => {
-    let updated = false;
-    const searchItemHistory = state.searchItemHistory.map((searchItem: any) => {
-        if (typeof searchItem === 'object' && searchItem !== null && !('id' in searchItem)) {
-            updated = true;
-            return { ...searchItem, id: uuidv4() };
-        }
-        return searchItem;
-    });
-    return { ...state, searchItemHistory };
-};
+function DisplayDataGrid({ data, showRowNumber, startIndex }: DataGridProps): React.ReactElement {
+    const columns = data.columnNames.map((name, index) => ({
+        id: name,
+        name: `${name} [${data.columnTypes[index]}]`,
+        field: index.toString(),
+        sortable: true
+    }));
 
-const validateSearchState = (state: GlimpseSearchState): GlimpseSearchState => {
-    let updated = false;
-    const results = state.results.map((result: SearchResult) => {
-        if (!result.id) {
-            updated = true;
-            return { ...result, id: uuidv4() };
-        }
-        return result;
-    });
-    return { ...state, results };
-};
+    if (showRowNumber) {
+        columns.unshift({ id: 'rowIndex', name: 'Row Index', field: 'rowIndex', sortable: true });
+    }
 
-
-function validateSearchHistory(state: GlimpseSearchProps): GlimpseSearchProps {
-    let updated = false;
-    const newSearchItemHistory = state.searchItemHistory.map(item => {
-        if (!item.id) {
-            updated = true;
-            return { ...item, id: uuidv4() };
-        }
+    const items = data.rows.map((row, rowIndex) => {
+        const item = { rowIndex: startIndex + rowIndex };
+        row.forEach((cell, cellIndex) => {
+            item[cellIndex] = cell;
+        });
         return item;
     });
 
-    if (updated) {
-        return { ...state, searchItemHistory: newSearchItemHistory };
-    }
-    return state;
+    return <Grid columns={columns} data={items} enableCellNavigation={true} enableColumnReorder={false} />;
 }
-
-
-// Function to validate and ensure unique IDs for previous search history
-const validateSearchHistory = (state: GlimpseSearchProps): GlimpseSearchProps => {
-    const searchItemHistoryMapping = state.searchItemHistory.reduce((acc: Record<string, number>, item, index) => {
-        acc[item] = index;
-        return acc;
-    }, {});
-    return { ...state, searchItemHistoryMapping };
-};
-
-// Function to validate and ensure unique IDs for search state results
-const validateSearchState = (state: GlimpseSearchState): GlimpseSearchState => {
-    const results = state.results.map((result, index) => ({ ...result, id: result.id || uuidv4() }));
-    return { ...state, results, hasUniqueIds: true };
-};

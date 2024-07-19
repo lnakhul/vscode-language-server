@@ -20,3 +20,27 @@ function DisplayDataGrid({ data, showRowNumber, startIndex }: DataGridProps): Re
 
     return <Grid columns={columns} data={items} enableCellNavigation={true} enableColumnReorder={false} />;
 }
+
+
+export function DisplayDataGrid({ data, showRowNumber, startIndex }: DataGridProps): React.ReactElement {
+  const columns = showRowNumber
+    ? [{ id: 'rowIndex', name: 'Row Index', field: 'rowIndex' }, ...data.columnNames.map((name, idx) => ({ id: name, name: `${name} [${data.columnTypes[idx]}]`, field: name }))]
+    : data.columnNames.map((name, idx) => ({ id: name, name: `${name} [${data.columnTypes[idx]}]`, field: name }));
+
+  const gridData = data.rows.map((row, rowIndex) => {
+    const rowData: Record<string, any> = showRowNumber ? { rowIndex: startIndex + rowIndex } : {};
+    row.forEach((cell, cellIndex) => {
+      rowData[data.columnNames[cellIndex]] = cell;
+    });
+    return rowData;
+  });
+
+  return (
+    <SlickGrid
+      gridId="quartz-slickgrid"
+      columnDefinitions={columns}
+      dataset={gridData}
+      options={{ enableCellNavigation: true, enableColumnReorder: false }}
+    />
+  );
+}

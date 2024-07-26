@@ -1,12 +1,11 @@
-import React, { useContext, useState, useCallback } from 'react';
+import React, { useContext, useState } from 'react';
 import { SlickgridReact, Column, GridOption } from 'slickgrid-react';
 import { v4 as uuidv4 } from 'uuid';
 import { StyleSheet, css } from 'aphrodite';
-import { VSCodeButton, VSCodePanels, VSCodePanelTab, VSCodePanelView } from '@vscode/webview-ui-toolkit/react';
-import { useDisposableEffects } from '../../shared/src/reactFunctions';
-import VsCodeExtensionContext, { renderIntoWebview, usePersistentState } from '../components/VsCodeExtensionContext';
+import { VSCodePanels, VSCodePanelTab, VSCodePanelView } from '@vscode/webview-ui-toolkit/react';
+import VsCodeExtensionContext, { renderIntoWebview } from '../components/VsCodeExtensionContext';
 import FormLabel from '../components/FormLabel';
-import { ReviewHistory, ReactViewProps, ReviewSummaryProps, RefreshSummaryProp } from '../interfaces/interfaces';
+import { ReviewHistory, ReactViewProps, ReviewSummaryProps } from '../interfaces/interfaces';
 
 const styles = StyleSheet.create({
   descriptionHeader: {
@@ -19,6 +18,10 @@ const styles = StyleSheet.create({
     margin: '5px 10px',
   },
 });
+
+interface ReviewHistoryWithId extends ReviewHistory {
+  id?: string;
+}
 
 type ReviewHistoryRowProp = {
   history: ReviewHistory[];
@@ -34,10 +37,10 @@ const ReviewHistoryRow: React.FC<ReviewHistoryRowProp> = ({ history }) => {
     { id: 'files', name: 'Files', field: 'files', formatter: (_, __, value) => value.map((file: any) => `${file.path} ${file.revision}`).join('\n') },
   ];
 
-  const dataset = history.map(h => ({
+  const dataset: ReviewHistoryWithId[] = history.map(h => ({
     ...h,
     reviewId: h.iscurrent ? 'CURRENT' : h.reviewId,
-    id: h.id ? h.id : uuidv4(), // Ensure each item has a unique ID
+    id: h.id ? h.id : uuidv4(),
   }));
 
   const gridOptions: GridOption = {

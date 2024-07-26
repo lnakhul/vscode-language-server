@@ -1,46 +1,57 @@
-function DisplayDataGrid({ data, showRowNumber, startIndex }: DataGridProps): React.ReactElement {
-    const columns = data.columnNames.map((name, index) => ({
-        id: name,
-        name: `${name} [${data.columnTypes[index]}]`,
-        field: index.toString(),
-        sortable: true
+const PathsGrid: React.FC<PathGridProps> = ({ headers, label, imlFiles, onClickPath }) => {
+    const cvsDiffSummary = useContext(CvsDiffSummaryContext);
+    const rows = cvsDiffSummary.pathInfos;
+
+    const columns: Column[] = headers.map((header, index) => ({
+        id: `column_${index}`,
+        name: header,
+        field: header,
+        sortable: true,
     }));
 
-    if (showRowNumber) {
-        columns.unshift({ id: 'rowIndex', name: 'Row Index', field: 'rowIndex', sortable: true });
-    }
-
-    const items = data.rows.map((row, rowIndex) => {
-        const item = { rowIndex: startIndex + rowIndex };
-        row.forEach((cell, cellIndex) => {
-            item[cellIndex] = cell;
+    const gridData = rows.map((row, rowIndex) => {
+        const rowData: Record<string, any> = {};
+        headers.forEach((header) => {
+            rowData[header] = row[header];
         });
-        return item;
+        return rowData;
     });
 
-    return <Grid columns={columns} data={items} enableCellNavigation={true} enableColumnReorder={false} />;
+    return (
+        <SlickgridReact
+            gridId={`path_grid_${label}`}
+            columnDefinitions={columns}
+            dataset={gridData}
+            gridOptions={{ enableCellNavigation: true, enableColumnReorder: false }}
+        />
+    );
 }
 
+const ReviewHistoryTable: React.FC<ReviewHistoryProp> = ({ history }) => {
+    const columns: Column[] = [
+        { id: 'status', name: 'Status', field: 'status', sortable: true },
+        { id: 'id', name: 'Id', field: 'id', sortable: true },
+        { id: 'description', name: 'Description', field: 'description', sortable: true },
+        { id: 'date', name: 'Date', field: 'date', sortable: true },
+        { id: 'author', name: 'Author', field: 'author', sortable: true },
+        { id: 'files', name: 'Files', field: 'files', sortable: true }
+    ];
 
-export function DisplayDataGrid({ data, showRowNumber, startIndex }: DataGridProps): React.ReactElement {
-  const columns = showRowNumber
-    ? [{ id: 'rowIndex', name: 'Row Index', field: 'rowIndex' }, ...data.columnNames.map((name, idx) => ({ id: name, name: `${name} [${data.columnTypes[idx]}]`, field: name }))]
-    : data.columnNames.map((name, idx) => ({ id: name, name: `${name} [${data.columnTypes[idx]}]`, field: name }));
+    const gridData = history.map((entry) => ({
+        status: entry.status,
+        id: entry.iscurrent ? 'CURRENT' : entry.reviewId,
+        description: entry.description,
+        date: entry.requestedDate,
+        author: entry.requestedBy,
+        files: entry.files.map(file => `${file.path} ${file.revision}`).join('\n'),
+    }));
 
-  const gridData = data.rows.map((row, rowIndex) => {
-    const rowData: Record<string, any> = showRowNumber ? { rowIndex: startIndex + rowIndex } : {};
-    row.forEach((cell, cellIndex) => {
-      rowData[data.columnNames[cellIndex]] = cell;
-    });
-    return rowData;
-  });
-
-  return (
-    <SlickGrid
-      gridId="quartz-slickgrid"
-      columnDefinitions={columns}
-      dataset={gridData}
-      options={{ enableCellNavigation: true, enableColumnReorder: false }}
-    />
-  );
+    return (
+        <SlickgridReact
+            gridId="reviewHistoryGrid"
+            columnDefinitions={columns}
+            dataset={gridData}
+            gridOptions={{ enableCellNavigation: true, enableColumnReorder: true }}
+        />
+    );
 }

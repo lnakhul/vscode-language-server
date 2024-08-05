@@ -3,6 +3,24 @@ import { SlickGrid, Column, GridOption } from "slickgrid-react";
 import { PathGridRowData, IML_DOC_LINK, PathInfo, ReviewPatchInfo } from "../interfaces/interfaces";
 import { ClickableCellElement, LoadingElement } from "./SharedComponents";
 
+interface FileRowData {
+    Path: string;
+    Rev: string;
+    DiffRev: string;
+    Lineno?: number;
+    [key: string]: string | number | undefined;
+}
+
+interface PathGridRowData {
+    path: string;
+    rev: string;
+    diffTag: string;
+    diffRev?: string;
+    modified: boolean;
+    iml?: boolean;
+    [key: string]: string | boolean | undefined;
+}
+
 export type PathGridColumn = {
   header: string;
   key: keyof PathGridRowData;
@@ -87,20 +105,20 @@ export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
   if (!rows || loading) return <LoadingElement label={loadingLabel} />;
 
   const columns: Column[] = columnOrder.map((col, index) => ({
-      id: col.key,
-      name: col.header === 'IML' ? <IMHeader /> : col.header,
-      field: col.key.toString(),
-      formatter: (row, cell, value, columnDef, dataContext) => {
-          if (col.key === 'iml') {
-              return <CheckedValue checked={value as boolean} />;
-          } else if (col.key === 'path') {
-              return <PathNavigationElement path={value as string} tag={dataContext.diffTag} row={dataContext} onClick={onClickPath} />;
-          } else if (col.key === 'rev') {
-              return convertRevToStringValue(value as string, dataContext.modified);
-          }
-          return value;
-      },
-      cssClass: col.key === 'path' && imlFiles?.includes(col.key) ? 'iml-cell' : ''
+    id: col.key as string,
+    name: col.header === 'IML' ? <IMHeader /> : col.header,
+    field: col.key as string,
+    formatter: (row, cell, value, columnDef, dataContext) => {
+      if (col.key === 'iml') {
+        return <CheckedValue checked={value as boolean} />;
+      } else if (col.key === 'path') {
+        return <PathNavigationElement path={value as string} tag={dataContext.diffTag} row={dataContext} onClick={onClickPath} />;
+      } else if (col.key === 'rev') {
+        return convertRevToStringValue(value as string, dataContext.modified);
+      }
+      return value;
+    },
+    cssClass: col.key === 'path' && imlFiles?.includes(col.key as string) ? 'iml-cell' : ''
   }));
 
   const options: GridOption = {

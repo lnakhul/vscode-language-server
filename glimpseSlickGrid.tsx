@@ -1,36 +1,98 @@
-const pathGridColumns: Column<FileRowData>[] = [
-        { id: 'path', name: 'Path', field: 'Path', sortable: true, formatter: clickablePathFormatter },
-        { id: 'rev', name: 'Rev', field: 'Rev', sortable: true },
-        { id: 'diffType', name: 'Diff Type', field: 'DiffType', sortable: true },
-        { id: 'diffAgainst', name: 'Diff Against', field: 'DiffRev', sortable: true },
-        { id: 'iml', name: 'IML', field: 'iml', sortable: true, formatter: imlFormatter }
-    ];
+import React from "react";
+import { SlickgridReact, Column, GridOption, Formatter } from 'slickgrid-react';
+import { v4 as uuidv4 } from 'uuid';
+import { PathGridRowData, IML_DOC_LINK, PathInfo, ReviewPatchInfo } from "../interfaces/interfaces";
+import { LoadingElement } from "./SharedComponents";
 
-    const pathGridDataset = convertPathInfoToFileRowData(pathInfos);
+export type PathGridColumn = {
+  header: string;
+  key: keyof PathGridRowData;
+};
 
-    const pathGridOptions: GridOption = {
-        enableCellNavigation: true,
-        enableColumnReorder: false,
-        enableSorting: true,
-        enableHeaderMenu: false,
-        autoHeight: true,
-        autoResize: {
-            containerId: 'grid-container',
-            rightPadding: 15
-        }
-    };
+function convertRevToStringValue(rev: string | undefined, modified: boolean): string {
+  return `${rev || "New"}${modified ? '*' : ''}`;
+}
 
-    function clickablePathFormatter(row: number, cell: number, value: string, columnDef: Column<FileRowData>, dataContext: FileRowData): string {
-        return `<a href="#" data-id="${dataContext.Path}" class="clickable-path">${value}</a>`;
-    }
+export function convertPathInfoToFileRowData(pathInfos: PathInfo[]): PathGridRowData[] {
+  return pathInfos.map(pathInfo => ({
+    path: pathInfo.path,
+    rev: pathInfo.rev,
+    diffRev: pathInfo.diffRev ?? 'None',
+    diffTag: pathInfo.diffType,
+    modified: pathInfo.precommit
+  }));
+}
 
-    function imlFormatter(row: number, cell: number, value: boolean): string {
-        return `<input type="checkbox" disabled ${value ? 'checked' : ''} />`;
-    }
+// Path Formatter
+const pathFormatter: Formatter<PathGridRowData> = (row, cell, value, columnDef, dataContext) => {
+  const element = document.createElement('span');
+  element.title = `Navigate to diff page for ${value} against ${dataContext.diffTag}`;
+  element.textContent = value;
+  return element;
+};
 
-    const onCellClicked = useCallback((e: Event, args: any) => {
-        const item = args?.item;
-        if (item) {
-            onPathClick(item);
-        }
-    }, []);
+// IML Formatter
+const imlFormatter: Formatter<PathGridRowData> = (row, cell, value, columnDef, dataContext) => {
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = !!value;
+  checkbox.disabled = true;
+  return checkbox;
+};
+
+// Define the columns
+const pathGridColumns: Column<PathGridRowData>[] = [
+  { id: 'path', name: 'Path', field: 'path', formatter: pathFormatter },
+  { id: 'rev', name: 'Rev', field: 'rev' },
+  { id: 'diffTag', name: 'Diff Type', field: 'diffTag' },
+  { id: 'diffRev', name: 'Diff Against', field: 'diffRev' },
+  { id: 'iml', name: 'IML', field: 'iml', formatter: imlFormatter },
+];
+
+// Grid options
+const gridOptions: GridOption = {
+  enableCellNavigation: true,
+  enableColumnReorder: true,
+  enableSorting: true,
+};
+
+type PathsGridProps = {
+  columnOrder: PathGridColumn[];
+  label: string;
+  imlFiles?: string[];
+  onClickPath: (rowData: PathGridRowData) => Promise<void>;
+  rows?: PathGridRowData[];
+  diffCvsTag: string;
+  loading: boolean;
+  loadingLabel: string;
+};
+
+export const PathsGrid: React.FC<PathsGridProps> = ({
+  columnOrder,
+  label,
+  imlFiles,
+  rows,
+  diffCvsTag,
+  onClickPath,
+  loading,
+  loadingLabel
+}) => {
+  if (!rows || loading) return <LoadingElement label={loadingLabel} />;
+
+  // Add a unique id for each row using uuidv4
+  const dataset = rows.map(row => ({ ...row, id: uuidv4(), iml: imlFiles?.includes(row.path) }));
+
+  return (
+    <SlickgridReact
+      gridId={`path_grid_${label}`}
+      columnDefinitions={pathGridColumns}
+      dataset={dataset}
+      gridOptions={gridOptions}
+      customEvents={{
+        onCellClicked: (e, args) => onClickPath(args.dataContext),
+      }}
+    />
+  );
+};
+
+export default PathsGrid;

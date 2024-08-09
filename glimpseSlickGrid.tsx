@@ -32,8 +32,8 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
     return approverGroups.flatMap(group => 
       group.approvers.map(approver => ({
         id: uuidv4(),
-        group: createCopyLink(group.roleName, approver.powwow, `Click to copy initials: ${approver.powwow}`),
-        approver: userToLink(approver.userName, approver),
+        group: createCopyLink(group.roleName, approver.powwow, `Click to copy initials: ${approver.powwow}`).toString(),
+        approver: userToLink(approver.userName, approver).toString(),
         select: selectedUserNames.has(approver.userName)
       }))
     );

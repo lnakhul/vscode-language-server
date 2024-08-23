@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useMemo } from "react";
-import { v4 as uuidv4 } from 'uuid';
+import React, { useEffect, useMemo, useRef } from "react";
 import { SlickgridReact, Column, GridOption } from "slickgrid-react";
+import { v4 as uuidv4 } from "uuid";
 import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
 import { createCopyLink, userToLink } from "../shared/sre/reactFunctions";
 import { SpinningIcon } from "./SpinningIcon";
@@ -19,9 +19,9 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
   const gridRef = useRef<SlickgridReact | null>(null);
 
   const columns: Column[] = [
-    { id: 'group', name: 'Group', field: 'group', width: 100 },
-    { id: 'approver', name: 'Approver', field: 'approver', width: 100 },
-    { id: 'select', name: 'Select', field: 'select', width: 50, formatter: (row, cell, value, columnDef, dataContext) => {
+    { id: 'group', name: 'Group', field: 'group', width: 100, formatter: (row, cell, value) => value },
+    { id: 'approver', name: 'Approver', field: 'approver', width: 100, formatter: (row, cell, value) => value },
+    { id: 'select', name: 'Select', field: 'select', width: 50, formatter: (row, cell, value) => {
       return `<input type="checkbox" ${value ? 'checked' : ''} />`;
     }},
   ];
@@ -32,8 +32,8 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
     return approverGroups.flatMap(group => 
       group.approvers.map(approver => ({
         id: uuidv4(),
-        group: createCopyLink(group.roleName, approver.powwow, `Click to copy initials: ${approver.powwow}`).toString(),
-        approver: userToLink(approver.userName, approver).toString(),
+        group: `<a href="#" title="Click to copy initials: ${approver.powwow}">${group.roleName}</a>`,
+        approver: `<a href="#" title="${approver.displayName}">${approver.userName}</a>`,
         select: selectedUserNames.has(approver.userName)
       }))
     );

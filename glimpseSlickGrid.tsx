@@ -149,7 +149,8 @@ export default ApproversView;
 
 
 import React, { useMemo } from "react";
-import { SlickGrid } from "slickgrid-react";
+import { SlickgridReact, Column, GridOption } from "slickgrid-react";
+import { v4 as uuidv4 } from "uuid";
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react";
 import { SpinningIcon } from "./SpinningIcon";
 import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
@@ -173,17 +174,18 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
   const data = useMemo(() => {
     const rows: any[] = [];
     approverGroups?.forEach(group => {
+      const groupId = uuidv4();
       rows.push({
-        id: `group_${group.roleName}`,
+        id: groupId,
         name: group.roleName,
         isGroup: true,
         approvers: group.approvers
       });
       group.approvers.forEach(approver => {
         rows.push({
-          id: `approver_${approver.userName}`,
+          id: uuidv4(),
           name: approver.displayName,
-          parent: `group_${group.roleName}`,
+          parent: groupId,
           isApprover: true,
           approver
         });
@@ -192,57 +194,54 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
     return rows;
   }, [approverGroups]);
 
-  const columns = [
-    {
-      id: "checkbox",
-      name: "",
-      field: "checkbox",
-      formatter: (row, cell, value, columnDef, dataContext) => {
-        if (dataContext.isGroup) {
-          const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
-          return `<input type="checkbox" ${checked ? "checked" : ""} />`;
-        } else if (dataContext.isApprover) {
-          const checked = selectedUserNames.has(dataContext.approver.userName);
-          return `<input type="checkbox" ${checked ? "checked" : ""} />`;
-        }
-        return "";
-      },
-      width: 30
-    },
+  const columns: Column[] = [
     {
       id: "name",
       name: "Name",
       field: "name",
-      formatter: (row, cell, value, columnDef, dataContext) => {
+      formatter: (_row, _cell, value, _columnDef, dataContext) => {
+        let checkbox = "";
+        if (isReviewerSelectable) {
+          if (dataContext.isGroup) {
+            const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
+            checkbox = `<input type="checkbox" ${checked ? "checked" : ""} />`;
+          } else if (dataContext.isApprover) {
+            const checked = selectedUserNames.has(dataContext.approver.userName);
+            checkbox = `<input type="checkbox" ${checked ? "checked" : ""} />`;
+          }
+        }
+
         if (dataContext.isGroup) {
-          return `<span>${createCopyLink(dataContext.name, dataContext.approvers.map((x: PathApprover) => x.powwow).join('|'), `Click to copy initials and select all reviewers in ${dataContext.name}`)}</span>`;
+          const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join('|');
+          const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+          return `<span>${checkbox} ${createCopyLink(dataContext.name, initials, tooltip)}</span>`;
         } else if (dataContext.isApprover) {
-          return `<span>${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}</span>`;
+          return `<span>${checkbox} ${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}</span>`;
         }
         return value;
       }
     }
   ];
 
-  const options = {
+  const options: GridOption = {
     enableTreeData: true,
     treeDataOptions: {
       columnId: "name",
       parentPropName: "parent",
-      hasChildrenPropName: "isGroup"
+      hasChildrenPropName: "isGroup",
+      initiallyCollapsed: false
     },
-    enableCheckboxSelector: true,
-    checkboxSelector: {
-      hideInColumnTitleRow: true
-    }
+    enableCheckboxSelector: false, // Disable default checkbox column
+    multiColumnSort: false,
+    enableFiltering: true
   };
 
   return (
-    <SlickGrid
+    <SlickgridReact
       gridId="approversGrid"
       columnDefinitions={columns}
       dataset={data}
-      options={options}
+      gridOptions={options}
     />
   );
 };

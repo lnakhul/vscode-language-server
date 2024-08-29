@@ -143,3 +143,108 @@ export const ApproversView: React.FC<ApproverViewProp> = ({
 };
 
 export default ApproversView;
+
+
+=======================================
+
+
+import React, { useMemo } from "react";
+import { SlickGrid } from "slickgrid-react";
+import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react";
+import { SpinningIcon } from "./SpinningIcon";
+import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
+import { createCopyLink, userToLink } from "../shared/sre/reactFunctions";
+import FormLabel from "./FormLabel";
+
+type ApproverViewProp = {
+  approverGroups?: QuackApproverGroup[];
+  onUserClick?: (approver: PathApprover, checked: boolean) => void;
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
+  isReviewerSelectable: boolean;
+  selectedUsers?: PathApprover[] | null;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
+};
+
+const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUsers, isReviewerSelectable, onUserClick, onUserGroupClick, onClickGroupLink }) => {
+  if (!approverGroups) return <SpinningIcon iconName="refresh" spin={approverGroups === undefined} />;
+
+  const selectedUserNames = new Set<string>(selectedUsers?.map(val => val.userName));
+
+  const data = useMemo(() => {
+    const rows: any[] = [];
+    approverGroups?.forEach(group => {
+      rows.push({
+        id: `group_${group.roleName}`,
+        name: group.roleName,
+        isGroup: true,
+        approvers: group.approvers
+      });
+      group.approvers.forEach(approver => {
+        rows.push({
+          id: `approver_${approver.userName}`,
+          name: approver.displayName,
+          parent: `group_${group.roleName}`,
+          isApprover: true,
+          approver
+        });
+      });
+    });
+    return rows;
+  }, [approverGroups]);
+
+  const columns = [
+    {
+      id: "checkbox",
+      name: "",
+      field: "checkbox",
+      formatter: (row, cell, value, columnDef, dataContext) => {
+        if (dataContext.isGroup) {
+          const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
+          return `<input type="checkbox" ${checked ? "checked" : ""} />`;
+        } else if (dataContext.isApprover) {
+          const checked = selectedUserNames.has(dataContext.approver.userName);
+          return `<input type="checkbox" ${checked ? "checked" : ""} />`;
+        }
+        return "";
+      },
+      width: 30
+    },
+    {
+      id: "name",
+      name: "Name",
+      field: "name",
+      formatter: (row, cell, value, columnDef, dataContext) => {
+        if (dataContext.isGroup) {
+          return `<span>${createCopyLink(dataContext.name, dataContext.approvers.map((x: PathApprover) => x.powwow).join('|'), `Click to copy initials and select all reviewers in ${dataContext.name}`)}</span>`;
+        } else if (dataContext.isApprover) {
+          return `<span>${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}</span>`;
+        }
+        return value;
+      }
+    }
+  ];
+
+  const options = {
+    enableTreeData: true,
+    treeDataOptions: {
+      columnId: "name",
+      parentPropName: "parent",
+      hasChildrenPropName: "isGroup"
+    },
+    enableCheckboxSelector: true,
+    checkboxSelector: {
+      hideInColumnTitleRow: true
+    }
+  };
+
+  return (
+    <SlickGrid
+      gridId="approversGrid"
+      columnDefinitions={columns}
+      dataset={data}
+      options={options}
+    />
+  );
+};
+
+export default ApproversView;

@@ -296,11 +296,29 @@ const ApproversView: React.FC<ApproverViewProp> = ({
 export default ApproversView;
 
 ===================================
+  const convertToHtmlString = (formatterResult: any): string => {
+  if (typeof formatterResult === 'string') {
+    return formatterResult;
+  } else if (formatterResult instanceof HTMLElement) {
+    return formatterResult.outerHTML;
+  } else if (formatterResult instanceof DocumentFragment) {
+    const div = document.createElement('div');
+    div.appendChild(formatterResult);
+    return div.innerHTML;
+  } else if (formatterResult && typeof formatterResult === 'object') {
+    if (formatterResult.hasOwnProperty('html')) {
+      return formatterResult.html;
+    } else if (formatterResult.hasOwnProperty('text')) {
+      return formatterResult.text;
+    }
+  }
+  return '';
+};
 
-  const customTreeFormatter = (row: number, cell: number, value: any, columnDef: any, dataContext: any, grid: any) => {
+const customTreeFormatter = (row: number, cell: number, value: any, columnDef: any, dataContext: any, grid: any) => {
   const treeFormatter = Formatters.tree(row, cell, value, columnDef, dataContext, grid);
   const container = document.createElement("div");
-  container.innerHTML = treeFormatter;
+  container.innerHTML = convertToHtmlString(treeFormatter);
 
   let checkbox = null;
   if (columnDef.isReviewerSelectable) {
@@ -343,5 +361,4 @@ export default ApproversView;
     container.appendChild(element);
   }
 
-  return container.innerHTML;
-};
+  re

@@ -247,3 +247,67 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
 };
 
 export default ApproversView;
+
+
+============================================
+
+  import React from "react";
+import { SlickgridReact, Column, GridOption } from "slickgrid-react";
+
+const ApproversView = () => {
+  const data = [
+    {
+      id: 'group-1',
+      name: 'Group 1',
+      __treeLevel: 0,
+      __hasChildren: true,
+    },
+    {
+      id: 'approver-1',
+      name: 'Approver 1',
+      __parentId: 'group-1',
+      __treeLevel: 1,
+    },
+    {
+      id: 'approver-2',
+      name: 'Approver 2',
+      __parentId: 'group-1',
+      __treeLevel: 1,
+    },
+  ];
+
+  const columns: Column[] = [
+    {
+      id: "name",
+      name: "Name",
+      field: "name",
+      formatter: (_row, _cell, value) => value,
+    },
+  ];
+
+  const options: GridOption = {
+    enableTreeData: true,
+    treeDataOptions: {
+      columnId: "name",
+      parentPropName: "__parentId",
+      hasChildrenPropName: "__hasChildren",
+      levelPropName: "__treeLevel",
+      initiallyCollapsed: false,  // Set to true or false based on preference
+    },
+    enableCheckboxSelector: false,
+    multiColumnSort: false,
+    enableFiltering: false,
+    enableSorting: true,
+  };
+
+  return (
+    <SlickgridReact
+      gridId="approversGrid"
+      columnDefinitions={columns}
+      dataset={data}
+      gridOptions={options}
+    />
+  );
+};
+
+export default ApproversView;

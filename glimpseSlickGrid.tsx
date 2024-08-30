@@ -294,3 +294,54 @@ const ApproversView: React.FC<ApproverViewProp> = ({
 };
 
 export default ApproversView;
+
+===================================
+
+  const customTreeFormatter = (row: number, cell: number, value: any, columnDef: any, dataContext: any, grid: any) => {
+  const treeFormatter = Formatters.tree(row, cell, value, columnDef, dataContext, grid);
+  const container = document.createElement("div");
+  container.innerHTML = treeFormatter;
+
+  let checkbox = null;
+  if (columnDef.isReviewerSelectable) {
+    if (dataContext.isGroup) {
+      const checked = dataContext.approvers.every((val: PathApprover) => columnDef.selectedUserNames.has(val.userName));
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => columnDef.onUserGroupClick?.(dataContext)}
+        />
+      );
+    } else if (dataContext.isApprover) {
+      const checked = columnDef.selectedUserNames.has(dataContext.approver.userName);
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => columnDef.onUserClick?.(dataContext.approver, !checked)}
+        />
+      );
+    }
+  }
+
+  if (dataContext.isGroup) {
+    const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join("|");
+    const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+    const element = renderElement(
+      <span>
+        {checkbox} {createCopyLink(dataContext.name, initials, tooltip)}
+      </span>
+    );
+    container.appendChild(element);
+  } else if (dataContext.isApprover) {
+    const element = renderElement(
+      <span>
+        {checkbox} {dataContext.name} {userToLink(dataContext.approver.userName, dataContext.approver.powwow)} {dataContext.approver.powwow}
+      </span>
+    );
+    container.appendChild(element);
+  }
+
+  return container.innerHTML;
+};

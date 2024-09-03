@@ -366,97 +366,84 @@ const customTreeFormatter = (row: number, cell: number, value: any, columnDef: a
 
 =======================================
 
-import React, { useEffect, useState } from 'react';
-import SlickgridReact from 'slickgrid-react';
+import React, { useEffect, useState } from "react";
+import { SlickgridReact, Column, GridOption, Formatters } from 'slickgrid-react';
 import { v4 as uuidv4 } from 'uuid';
-import { Column, Formatters, GridOption } from 'slickgrid-react';
+import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
 
-type Approver = {
-  id: string;
-  parentId?: string;
-  displayName: string;
-  powwow: string;
-  userName: string;
-  canApprove: boolean;
-};
-
-type ApproverGroup = {
-  roleName: string;
-  approvers: Approver[];
-};
-
-type Props = {
-  approverGroups: ApproverGroup[];
+type ApproverViewProp = {
+  approverGroups?: QuackApproverGroup[];
+  onUserClick?: (approver: PathApprover, checked: boolean) => void;
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
   isReviewerSelectable: boolean;
-  selectedUsers: Set<string>;
-  onUserClick?: (approver: Approver, checked: boolean) => void;
-  onUserGroupClick?: (group: ApproverGroup, checked: boolean) => void;
+  selectedUsers?: PathApprover[] | null;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
 };
 
-const ApproversListView: React.FC<Props> = ({ approverGroups, isReviewerSelectable, selectedUsers, onUserClick, onUserGroupClick }) => {
+const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUsers, isReviewerSelectable, onUserClick, onUserGroupClick, onClickGroupLink }) => {
+  const [dataset, setDataset] = useState<any[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
-  const [dataset, setDataset] = useState<Approver[]>([]);
+  const [gridOptions, setGridOptions] = useState<GridOption>({});
 
   useEffect(() => {
-    // Prepare the columns
-    const cols: Column[] = [
-      {
-        id: 'title',
-        name: 'Approvers',
-        field: 'displayName',
-        formatter: Formatters.tree,
-        width: 200,
-        exportWithFormatter: true,
-      },
-      {
-        id: 'canApprove',
-        name: 'Can Approve',
-        field: 'canApprove',
-        formatter: Formatters.checkmark,
-        width: 100,
-        exportWithFormatter: true,
-      },
-      // Add more columns as needed
-    ];
-    setColumns(cols);
+    if (approverGroups) {
+      const data = approverGroups.flatMap(group => {
+        const groupId = uuidv4();
+        return [
+          {
+            id: groupId,
+            title: group.roleName,
+            __hasChildren: true,
+            __collapsed: true,
+            __treeLevel: 0,
+            isGroup: true,
+          },
+          ...group.approvers.map(approver => ({
+            id: uuidv4(),
+            parentId: groupId,
+            title: approver.displayName,
+            canApprove: approver.canApprove,
+            __treeLevel: 1,
+          }))
+        ];
+      });
 
-    // Prepare the dataset
-    const data: Approver[] = [];
-    approverGroups.forEach((group) => {
-      const groupId = uuidv4();
-      data.push({
-        id: groupId,
-        displayName: group.roleName,
-        powwow: '',
-        userName: '',
-        canApprove: false,
+      setDataset(data);
+
+      setColumns([
+        {
+          id: 'title',
+          name: 'Title',
+          field: 'title',
+          formatter: Formatters.tree,
+          width: 220,
+        },
+        {
+          id: 'canApprove',
+          name: 'Can Approve',
+          field: 'canApprove',
+          formatter: Formatters.checkmark,
+          width: 100,
+        }
+      ]);
+
+      setGridOptions({
+        enableTreeData: true,
+        treeDataOptions: {
+          columnId: 'title',
+          parentPropName: 'parentId',
+          levelPropName: '__treeLevel',
+          indentMarginLeft: 15,
+          initiallyCollapsed: true,
+        },
       });
-      group.approvers.forEach((approver) => {
-        data.push({
-          ...approver,
-          id: uuidv4(),
-          parentId: groupId,
-        });
-      });
-    });
-    setDataset(data);
+    }
   }, [approverGroups]);
 
-  const gridOptions: GridOption = {
-    enableTreeData: true,
-    treeDataOptions: {
-      columnId: 'title',
-      parentPropName: 'parentId',
-      initiallyCollapsed: true,
-    },
-    enableCheckboxSelector: isReviewerSelectable,
-    rowHeight: 40,
-  };
-
   return (
-    <div>
+    <div id="grid-container" style={{ width: '100%', height: '500px' }}>
       <SlickgridReact
-        gridId="approverGrid"
+        gridId="approversGrid"
         columnDefinitions={columns}
         gridOptions={gridOptions}
         dataset={dataset}
@@ -465,5 +452,5 @@ const ApproversListView: React.FC<Props> = ({ approverGroups, isReviewerSelectab
   );
 };
 
-export default ApproversListView;
+export default ApproversView;
 

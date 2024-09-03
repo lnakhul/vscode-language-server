@@ -362,3 +362,108 @@ const customTreeFormatter = (row: number, cell: number, value: any, columnDef: a
   }
 
   re
+
+
+=======================================
+
+import React, { useEffect, useState } from 'react';
+import SlickgridReact from 'slickgrid-react';
+import { v4 as uuidv4 } from 'uuid';
+import { Column, Formatters, GridOption } from 'slickgrid-react';
+
+type Approver = {
+  id: string;
+  parentId?: string;
+  displayName: string;
+  powwow: string;
+  userName: string;
+  canApprove: boolean;
+};
+
+type ApproverGroup = {
+  roleName: string;
+  approvers: Approver[];
+};
+
+type Props = {
+  approverGroups: ApproverGroup[];
+  isReviewerSelectable: boolean;
+  selectedUsers: Set<string>;
+  onUserClick?: (approver: Approver, checked: boolean) => void;
+  onUserGroupClick?: (group: ApproverGroup, checked: boolean) => void;
+};
+
+const ApproversListView: React.FC<Props> = ({ approverGroups, isReviewerSelectable, selectedUsers, onUserClick, onUserGroupClick }) => {
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [dataset, setDataset] = useState<Approver[]>([]);
+
+  useEffect(() => {
+    // Prepare the columns
+    const cols: Column[] = [
+      {
+        id: 'title',
+        name: 'Approvers',
+        field: 'displayName',
+        formatter: Formatters.tree,
+        width: 200,
+        exportWithFormatter: true,
+      },
+      {
+        id: 'canApprove',
+        name: 'Can Approve',
+        field: 'canApprove',
+        formatter: Formatters.checkmark,
+        width: 100,
+        exportWithFormatter: true,
+      },
+      // Add more columns as needed
+    ];
+    setColumns(cols);
+
+    // Prepare the dataset
+    const data: Approver[] = [];
+    approverGroups.forEach((group) => {
+      const groupId = uuidv4();
+      data.push({
+        id: groupId,
+        displayName: group.roleName,
+        powwow: '',
+        userName: '',
+        canApprove: false,
+      });
+      group.approvers.forEach((approver) => {
+        data.push({
+          ...approver,
+          id: uuidv4(),
+          parentId: groupId,
+        });
+      });
+    });
+    setDataset(data);
+  }, [approverGroups]);
+
+  const gridOptions: GridOption = {
+    enableTreeData: true,
+    treeDataOptions: {
+      columnId: 'title',
+      parentPropName: 'parentId',
+      initiallyCollapsed: true,
+    },
+    enableCheckboxSelector: isReviewerSelectable,
+    rowHeight: 40,
+  };
+
+  return (
+    <div>
+      <SlickgridReact
+        gridId="approverGrid"
+        columnDefinitions={columns}
+        gridOptions={gridOptions}
+        dataset={dataset}
+      />
+    </div>
+  );
+};
+
+export default ApproversListView;
+

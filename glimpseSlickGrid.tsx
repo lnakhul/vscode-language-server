@@ -173,3 +173,66 @@ const ApproversView: React.FC<ApproverViewProp> = ({
 };
 
 export default ApproversView;
+
+
+======================================
+
+  const addCustomElements = (
+  isReviewerSelectable: boolean,
+  selectedUserNames: Set<string>,
+  onUserClick?: (approver: PathApprover, checked: boolean) => void,
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
+) => (cellNode: HTMLElement, row: number, dataContext: any) => {
+  // Keep tree collapsing/expanding functionality intact by not replacing the core content
+  const treeContent = cellNode.innerHTML; // Preserve existing tree content
+  
+  let checkbox = null;
+  let customContent = "";
+
+  // Custom checkbox rendering for group and approvers
+  if (isReviewerSelectable) {
+    if (dataContext.isGroup) {
+      const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onUserGroupClick?.(dataContext, !checked)}
+        />
+      );
+    } else if (dataContext.isApprover) {
+      const checked = selectedUserNames.has(dataContext.approver.userName);
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onUserClick?.(dataContext.approver, !checked)}
+        />
+      );
+    }
+  }
+
+  // Prepare custom links and checkbox content for rendering
+  if (dataContext.isGroup) {
+    const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join('|');
+    const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+    customContent = `${createCopyLink(dataContext.name, initials, tooltip)} `;
+  } else if (dataContext.isApprover) {
+    customContent = `${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}`;
+  }
+
+  // Clear existing content and append the custom content with the tree content intact
+  while (cellNode.firstChild) {
+    cellNode.removeChild(cellNode.firstChild);
+  }
+
+  // Append the tree content with custom checkbox and links
+  const container = document.createElement('div');
+  ReactDOM.render(
+    <>
+      {checkbox} <span dangerouslySetInnerHTML={{ __html: treeContent }} /> {customContent}
+    </>,
+    container
+  );
+  cellNode.appendChild(container.firstChild); // Add everything into the cell
+};

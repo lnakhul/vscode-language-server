@@ -62,7 +62,10 @@ const addCustomElements = (
   if (checkbox) {
     const container = document.createElement('div');
     ReactDOM.render(checkbox, container);
-    cellNode.prepend(container.firstChild);  // Add the checkbox at the beginning of the cell
+    if (container.firstChild) {
+      // Add the checkbox at the beginning of the cell
+      cellNode.prepend(container.firstChild);
+    }
   }
 
   if (dataContext.isGroup) {
@@ -72,7 +75,10 @@ const addCustomElements = (
 
     const container = document.createElement('div');
     ReactDOM.render(<span>{copyLink}</span>, container);
-    cellNode.appendChild(container.firstChild);  // Append the copy link at the end of the cell
+    if (container.firstChild) {
+      // Append the copy link at the end of the cell
+      cellNode.appendChild(container.firstChild);
+    }
   }
 
   if (dataContext.isApprover) {
@@ -85,9 +91,12 @@ const addCustomElements = (
       </span>,
       container
     );
-    cellNode.appendChild(container.firstChild);  // Append the approver information at the end of the cell
+    if (container.firstChild) {
+      // Append the approver information at the end of the cell
+      cellNode.appendChild(container.firstChild);
+    }
   }
-};
+}
 
 const ApproversView: React.FC<ApproverViewProp> = ({
   approverGroups,

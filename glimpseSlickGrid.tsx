@@ -192,3 +192,115 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
 };
 
 export default ApproversView;
+
+
+=====================================
+
+import React, { useEffect, useState } from "react";
+import { v4 as uuidv4 } from 'uuid';
+import { SlickgridReact, Column, GridOption, FieldType, Formatters } from 'slickgrid-react';
+import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
+import { SpinningIcon } from "./SpinningIcon";
+
+type ApproverViewProp = {
+  approverGroups?: QuackApproverGroup[];
+  onUserClick?: (approver: PathApprover, checked: boolean) => void;
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
+  isReviewerSelectable: boolean;
+  selectedUsers?: PathApprover[] | null;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
+};
+
+const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUsers, isReviewerSelectable, onUserClick, onUserGroupClick, onClickGroupLink }) => {
+  const [dataset, setDataset] = useState<any[]>([]);
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [gridOptions, setGridOptions] = useState<GridOption>({});
+
+  useEffect(() => {
+    if (approverGroups) {
+      const formattedData = approverGroups.map(group => ({
+        id: uuidv4(),
+        file: group.roleName,
+        approvers: group.approvers.map(approver => ({
+          id: uuidv4(),
+          file: approver.displayName,
+          userName: approver.userName,
+          canApprove: approver.canApprove
+        }))
+      }));
+
+      setDataset(formattedData);
+
+      setColumns([
+        {
+          id: 'file',
+          name: 'Approvers',
+          field: 'file',
+          type: FieldType.string,
+          formatter: Formatters.tree,
+          width: 200
+        },
+        {
+          id: 'userName',
+          name: 'Username',
+          field: 'userName',
+          type: FieldType.string,
+          width: 150
+        },
+        {
+          id: 'canApprove',
+          name: 'Can Approve',
+          field: 'canApprove',
+          type: FieldType.boolean,
+          formatter: Formatters.checkmark,
+          width: 100
+        }
+      ]);
+
+      setGridOptions({
+        enableTreeData: true,
+        treeDataOptions: {
+          columnId: 'file',
+          childrenPropName: 'approvers'
+        },
+        enableCheckboxSelector: isReviewerSelectable,
+        enableRowSelection: isReviewerSelectable,
+        rowSelectionOptions: {
+          selectActiveRow: false
+        },
+        enableCheckboxSelector: true,
+        enableRowSelection: true,
+        rowSelectionOptions: {
+          selectActiveRow: false
+        },
+        onSelectedRowsChanged: (e, args) => {
+          const selectedRows = args.rows;
+          const newDataset = dataset.map(group => ({
+            ...group,
+            __selected: selectedRows.includes(group.id),
+            approvers: group.approvers.map(approver => ({
+              ...approver,
+              __selected: selectedRows.includes(approver.id)
+            }))
+          }));
+          setDataset(newDataset);
+        }
+      });
+    }
+  }, [approverGroups]);
+
+  if (!approverGroups) return <SpinningIcon iconName="refresh" spin={approverGroups === undefined} />;
+
+  return (
+    <div style={{ width: '100%', height: '500px' }}>
+      <SlickgridReact
+        gridId="approversGrid"
+        columnDefinitions={columns}
+        gridOptions={gridOptions}
+        dataset={dataset}
+      />
+    </div>
+  );
+};
+
+export default ApproversView;

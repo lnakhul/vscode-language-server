@@ -4,12 +4,11 @@ const addCustomElements = (
   onUserClick?: (approver: PathApprover, checked: boolean) => void,
   onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
 ) => (cellNode: HTMLElement, row: number, dataContext: any) => {
-  // We need to ensure that the cell still supports tree collapsing/expanding
-
+  const treeContent = cellNode.innerHTML;  // This preserves the tree content rendered by Formatters.tree
   let checkbox = null;
   let additionalContent = "";
 
-  // Render checkboxes for groups and approvers
+  // Add checkboxes for groups and approvers
   if (isReviewerSelectable) {
     if (dataContext.isGroup) {
       const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
@@ -41,22 +40,18 @@ const addCustomElements = (
     additionalContent = `${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}`;
   }
 
-  // Remove existing inner content to avoid duplication
+  // Clear and re-add content with custom elements
   while (cellNode.firstChild) {
     cellNode.removeChild(cellNode.firstChild);
   }
-
-  // Rebuild the content by preserving the tree structure and appending custom content
   const container = document.createElement("div");
   ReactDOM.render(
     <>
-      {checkbox} {additionalContent}
+      {checkbox} <span dangerouslySetInnerHTML={{ __html: treeContent }} /> {additionalContent}
     </>,
     container
   );
-
-  // Ensure firstChild exists before appending
   if (container.firstChild) {
-    cellNode.appendChild(container.firstChild); // Add the combined content to the cell
+    cellNode.appendChild(container.firstChild);
   }
 };

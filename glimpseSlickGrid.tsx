@@ -58,10 +58,18 @@ const addCustomElements = (
 
 =============================
 
-  treeToggleIcon = (
-        <span
-          style={{ cursor: "pointer", marginRight: "5px" }}
-          onClick={() => gridInstance?.dataView.toggleTreeDataCollapse(dataContext.id)}
-        >
-          {dataContext.__collapsed ? "▶" : "▼"} {/* Show arrow based on collapsed state */}
-        </span>
+ const treeFormatter = (_row: number, _cell: number, value: any, _columnDef: Column, dataContext: any) => {
+  const { isGroup, approvers, isApprover } = dataContext;
+  const treeToggleIcon = dataContext.__collapsed ? '▶' : '▼';
+
+  let additionalContent = '';
+  if (isGroup) {
+    const initials = approvers.map((x: PathApprover) => x.powwow).join('|');
+    const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+    additionalContent = `${createCopyLink(dataContext.name, initials, tooltip)} `;
+  } else if (isApprover) {
+    additionalContent = `${dataContext.name} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}`;
+  }
+
+  return `<span>${treeToggleIcon}</span> ${additionalContent}`;
+};

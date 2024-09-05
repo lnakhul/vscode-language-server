@@ -55,3 +55,13 @@ const addCustomElements = (
     cellNode.appendChild(container.firstChild);
   }
 };
+
+=============================
+
+  treeToggleIcon = (
+        <span
+          style={{ cursor: "pointer", marginRight: "5px" }}
+          onClick={() => gridInstance?.dataView.toggleTreeDataCollapse(dataContext.id)}
+        >
+          {dataContext.__collapsed ? "▶" : "▼"} {/* Show arrow based on collapsed state */}
+        </span>

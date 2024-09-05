@@ -236,3 +236,80 @@ export default ApproversView;
   );
   cellNode.appendChild(container.firstChild); // Add everything into the cell
 };
+
+
+
+=================================
+
+
+import React from 'react';
+import ReactDOM from 'react-dom';
+
+const addCustomElements = (
+  isReviewerSelectable: boolean,
+  selectedUserNames: Set<string>,
+  onUserClick?: (approver: PathApprover, checked: boolean) => void,
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
+) => (cellNode: HTMLElement, row: number, dataContext: any) => {
+  let checkbox = null;
+
+  if (isReviewerSelectable) {
+    if (dataContext.isGroup) {
+      const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onUserGroupClick?.(dataContext, !checked)}
+        />
+      );
+    } else if (dataContext.isApprover) {
+      const checked = selectedUserNames.has(dataContext.approver.userName);
+      checkbox = (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onUserClick?.(dataContext.approver, !checked)}
+        />
+      );
+    }
+  }
+
+  if (checkbox) {
+    const container = document.createElement('div');
+    ReactDOM.render(checkbox, container);
+    if (container.firstChild) {
+      // Add the checkbox at the beginning of the cell
+      cellNode.prepend(container.firstChild);
+    }
+  }
+
+  if (dataContext.isGroup) {
+    const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join('|');
+    const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+    const copyLink = createCopyLink(dataContext.name, initials, tooltip);
+
+    const container = document.createElement('div');
+    ReactDOM.render(<span>{copyLink}</span>, container);
+    if (container.firstChild) {
+      // Append the copy link at the end of the cell
+      cellNode.appendChild(container.firstChild);
+    }
+  }
+
+  if (dataContext.isApprover) {
+    const userLink = userToLink(dataContext.approver.userName, dataContext.approver.powwow);
+
+    const container = document.createElement('div');
+    ReactDOM.render(
+      <span>
+        {dataContext.name} {userLink} {dataContext.approver.powwow}
+      </span>,
+      container
+    );
+    if (container.firstChild) {
+      // Append the approver information at the end of the cell
+      cellNode.appendChild(container.firstChild);
+    }
+  }
+}

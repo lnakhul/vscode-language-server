@@ -52,3 +52,40 @@ const approversTreeFormatter = (
     return <span>{dataContext.name}</span>;
   };
 };
+
+
+
+===================
+
+asyncPostRender: (domNode, row, dataContext, columnDef) => {
+        // Generate HTML using the custom formatter
+        const htmlContent = generateHTML(
+          isReviewerSelectable,
+          selectedUserNames,
+          onUserClick,
+          onUserGroupClick,
+          dataContext
+        );
+
+        // Insert HTML content into the DOM node
+        if (domNode) {
+          domNode.innerHTML = htmlContent;
+        }
+
+        // Add event listeners for checkboxes
+        const groupCheckbox = domNode.querySelector(".approver-group-checkbox");
+        if (groupCheckbox) {
+          groupCheckbox.addEventListener("change", (event) => {
+            const target = event.target as HTMLInputElement;
+            onUserGroupClick?.(dataContext, target.checked);
+          });
+        }
+
+        const approverCheckbox = domNode.querySelector(".approver-checkbox");
+        if (approverCheckbox) {
+          approverCheckbox.addEventListener("change", (event) => {
+            const target = event.target as HTMLInputElement;
+            onUserClick?.(dataContext.approver, target.checked);
+          });
+        }
+      },

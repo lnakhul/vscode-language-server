@@ -304,3 +304,33 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
 };
 
 export default ApproversView;
+
+=================================
+
+const approversTreeFormatter = (
+  row: number, 
+  cell: number, 
+  value: any, 
+  columnDef: Column, 
+  dataContext: any, 
+  grid: SlickGrid
+) => {
+  const defaultTreeFormatter = Formatters.tree(row, cell, value, columnDef, dataContext, grid); // Maintain tree structure
+
+  let checkbox = null;
+  if (dataContext.isGroup) {
+    const checked = dataContext.approvers.every((approver: PathApprover) => dataContext.selectedUserNames.has(approver.userName));
+    checkbox = (<input type="checkbox" checked={checked} onChange={() => dataContext.onUserGroupClick?.(dataContext, !checked)} />);
+  } else if (dataContext.isApprover) {
+    const checked = dataContext.selectedUserNames.has(dataContext.approver.userName);
+    checkbox = (<input type="checkbox" checked={checked} onChange={() => dataContext.onUserClick?.(dataContext.approver, !checked)} />);
+  }
+
+  const renderedElement = dataContext.isGroup ? (
+    <span>{checkbox} {createCopyLink(dataContext.name, dataContext.approvers.map((x: PathApprover) => x.powwow).join('|'), `Click to copy initials and select all reviewers in ${dataContext.name}`)}</span>
+  ) : (
+    <span>{checkbox} {dataContext.name} {userToLink(dataContext.approver.userName, dataContext.approver.powwow)} {dataContext.approver.powwow}</span>
+  );
+
+  return renderElement(<span>{renderedElement}{defaultTreeFormatter}</span>);
+};

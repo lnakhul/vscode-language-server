@@ -1,40 +1,39 @@
-const createCheckbox = (checked: boolean, onChange: () => void) => {
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = checked;
-  input.addEventListener("change", onChange);
-  return input;
-};
+function approversTreeFormatter(
+  isReviewerSelectable: boolean,
+  selectedUserNames: Set<string>,
+  onUserClick?: (approver: PathApprover, checked: boolean) => void,
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
+) {
+  return (row: number, _cell: number, value: any, columnDef: Column, dataContext: any, grid: SlickGrid) => {
+    const treeLevel = dataContext['__treeLevel'] || 0;
+    const isLeaf = !dataContext['__hasChildren'];
+    const indent = `<span style="display:inline-block; width:${treeLevel * 15}px;"></span>`;
+    const collapseIcon = isLeaf
+      ? ''
+      : `<span class="slick-group-toggle ${dataContext.__collapsed ? 'collapsed' : 'expanded'}"></span>`;
 
-// Custom formatter that adds checkboxes based on tree nodes
-const approversTreeFormatter = (row: number, cell: number, value: any, columnDef: Column, dataContext: any, grid: SlickGrid) => {
-  // Render the tree node first using the default formatter
-  const treeNode = Formatters.tree(row, cell, value, columnDef, dataContext, grid);
+    let checkbox = null;
+    if (isReviewerSelectable) {
+      if (dataContext.isGroup) {
+        const checked = dataContext.approvers.every((val: PathApprover) => selectedUserNames.has(val.userName));
+        checkbox = `<input type="checkbox" ${checked ? 'checked' : ''} onclick="(${() => onUserGroupClick?.(dataContext, !checked)})()" />`;
+      } else if (dataContext.isApprover) {
+        const checked = selectedUserNames.has(dataContext.approver.userName);
+        checkbox = `<input type="checkbox" ${checked ? 'checked' : ''} onclick="(${() => onUserClick?.(dataContext.approver, !checked)})()" />`;
+      }
+    }
 
-  // Handle checkboxes for group and individual approvers
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
+    if (dataContext.isGroup) {
+      const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join('|');
+      const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
+      const groupLabel = `${checkbox} ${createCopyLink(dataContext.name, initials, tooltip)}`;
 
-  if (dataContext.isGroup) {
-    const allChecked = dataContext.approvers.every((approver: PathApprover) =>
-      dataContext.selectedUserNames.has(approver.userName)
-    );
-    checkbox.checked = allChecked;
-    checkbox.onchange = () => {
-      dataContext.onUserGroupClick?.(dataContext.groupData, !allChecked);
-    };
-  } else if (dataContext.isApprover) {
-    const isChecked = dataContext.selectedUserNames.has(dataContext.approver.userName);
-    checkbox.checked = isChecked;
-    checkbox.onchange = () => {
-      dataContext.onUserClick?.(dataContext.approver, !isChecked);
-    };
-  }
+      return `${indent}${collapseIcon} ${groupLabel}`;
+    } else if (dataContext.isApprover) {
+      const approverLabel = `${checkbox} ${value} ${userToLink(dataContext.approver.userName, dataContext.approver.powwow)} ${dataContext.approver.powwow}`;
+      return `${indent}${collapseIcon} ${approverLabel}`;
+    }
 
-  // Combine the checkbox with the tree node
-  const wrapper = document.createElement("div");
-  wrapper.appendChild(checkbox);
-  wrapper.appendChild(treeNode);
-
-  return wrapper;
-};
+    return `${indent}${collapseIcon} ${value}`;
+  };
+}

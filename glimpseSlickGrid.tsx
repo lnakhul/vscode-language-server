@@ -154,3 +154,37 @@ const ApproversView: React.FC<ApproverViewProp> = ({ approverGroups, selectedUse
 };
 
 export default ApproversView;
+
+
+================================
+
+const treeFormatter = (
+  isReviewerSelectable: boolean,
+  selectedUserNames: Set<string>,
+  onUserClick?: (approver: PathApprover, checked: boolean) => void,
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void,
+  isReviewPage?: boolean // This determines which page we're on
+) => {
+  return (_row: number, _cell: number, value: any, _columnDef: Column, dataContext: any, grid: SlickGrid) => {
+    const treeHtml = Formatters.tree(_row, _cell, value, _columnDef, dataContext, grid);
+    
+    // Only apply custom formatting on the review page
+    if (isReviewPage) {
+      const customContent = approversTreeFormatter(isReviewerSelectable, selectedUserNames, onUserClick, onUserGroupClick)(
+        _row, _cell, value, _columnDef, dataContext
+      );
+      
+      // Return combined HTML for tree structure and custom content
+      return `${treeHtml} ${customContent.outerHTML}`;
+    }
+
+    // Just return the tree structure if on the summary page (without checkboxes, links, etc.)
+    return treeHtml;
+  };
+};
+
+
+
+
+
+formatter: treeFormatter(isReviewerSelectable, selectedUserNames, onUserClick, onUserGroupClick, isReviewPage),

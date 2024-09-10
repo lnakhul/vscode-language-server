@@ -1,91 +1,26 @@
-const approversTreeFormatter = (
-  isReviewerSelectable: boolean,
-  selectedUserNames: Set<string>,
-  onUserClick?: (approver: PathApprover, checked: boolean) => void,
-  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
-) => {
-  return (dataContext: any) => {
-    let checkbox = null;
+const treeFormatter: Formatter = (_row, _cell, value, _columnDef, dataContext, grid) => {
+  const gridOptions = grid.getOptions();
+  const treeLevelPropName = gridOptions.treeDataOptions?.levelPropName || '__treeLevel';
+  if (value === null || value === undefined || dataContext === undefined) {
+    return '';
+  }
+  const dataView = grid.getData();
+  const data = dataView.getItems();
+  const identifierPropName = dataView.getIdPropertyName() || 'id';
+  const idx = dataView.getIdxById(dataContext[identifierPropName]) as number;
+  const treeLevel = dataContext[treeLevelPropName];
+  const spacer = `<span style="display:inline-block; width:${(15 * treeLevel)}px;"></span>`;
 
-    // Check if the item is a group or an approver
-    if (isReviewerSelectable) {
-      if (dataContext.isGroup) {
-        const checked = dataContext.approvers.every((val: PathApprover) =>
-          selectedUserNames.has(val.userName)
-        );
-        checkbox = (
-          <VSCodeCheckbox
-            checked={checked}
-            onClick={() => onUserGroupClick?.(dataContext, !checked)}
-          />
-        );
-      } else if (dataContext.isApprover) {
-        const checked = selectedUserNames.has(dataContext.approver.userName);
-        checkbox = (
-          <VSCodeCheckbox
-            checked={checked}
-            onClick={() => onUserClick?.(dataContext.approver, !checked)}
-          />
-        );
-      }
+  const customFormatter = approversTreeFormatter(true, new Set(), undefined, undefined);
+  const customContent = customFormatter(_row, _cell, value, _columnDef, dataContext);
+
+  if (data[idx + 1]?.[treeLevelPropName] > data[idx][treeLevelPropName] || data[idx]['__hasChildren']) {
+    if (dataContext.__collapsed) {
+      return `<span class="hidden"></span>${spacer} <span class="slick-group-toggle collapsed" level="${treeLevel}"></span>${customContent.outerHTML}`;
+    } else {
+      return `<span class="hidden"></span>${spacer} <span class="slick-group-toggle expanded" level="${treeLevel}"></span>${customContent.outerHTML}`;
     }
-
-    // Render the group or approver elements
-    if (dataContext.isGroup) {
-      const initials = dataContext.approvers.map((x: PathApprover) => x.powwow).join('|');
-      const tooltip = `Click to copy initials and select all reviewers in ${dataContext.name}`;
-      return (
-        <span>
-          {checkbox} {createCopyLink(dataContext.name, initials, tooltip)}
-        </span>
-      );
-    } else if (dataContext.isApprover) {
-      return (
-        <span>
-          {checkbox} {dataContext.name}{" "}
-          {userToLink(dataContext.approver.userName, dataContext.approver.powwow)}{" "}
-          {dataContext.approver.powwow}
-        </span>
-      );
-    }
-
-    return <span>{dataContext.name}</span>;
-  };
+  } else {
+    return `<span class="hidden"></span>${spacer} <span class="slick-group-toggle" level="${treeLevel}"></span>${customContent.outerHTML}`;
+  }
 };
-
-
-
-===================
-
-asyncPostRender: (domNode, row, dataContext, columnDef) => {
-        // Generate HTML using the custom formatter
-        const htmlContent = generateHTML(
-          isReviewerSelectable,
-          selectedUserNames,
-          onUserClick,
-          onUserGroupClick,
-          dataContext
-        );
-
-        // Insert HTML content into the DOM node
-        if (domNode) {
-          domNode.innerHTML = htmlContent;
-        }
-
-        // Add event listeners for checkboxes
-        const groupCheckbox = domNode.querySelector(".approver-group-checkbox");
-        if (groupCheckbox) {
-          groupCheckbox.addEventListener("change", (event) => {
-            const target = event.target as HTMLInputElement;
-            onUserGroupClick?.(dataContext, target.checked);
-          });
-        }
-
-        const approverCheckbox = domNode.querySelector(".approver-checkbox");
-        if (approverCheckbox) {
-          approverCheckbox.addEventListener("change", (event) => {
-            const target = event.target as HTMLInputElement;
-            onUserClick?.(dataContext.approver, target.checked);
-          });
-        }
-      },

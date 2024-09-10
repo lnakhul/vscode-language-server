@@ -221,3 +221,40 @@ const treeFormatter: Formatter = (_row, _cell, value, _columnDef, dataContext, g
 
   return `${spacer} ${customContent.outerHTML}`;
 };
+
+==========================================
+
+const treeFormatter = (
+  isReviewerSelectable: boolean,
+  selectedUserNames: Set<string>,
+  onUserClick?: (approver: PathApprover, checked: boolean) => void,
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void
+): Formatter => {
+  return (_row, _cell, value, _columnDef, dataContext, grid) => {
+    const gridOptions = grid.getOptions();
+    const treeLevelPropName = gridOptions.treeDataOptions?.levelPropName || '__treeLevel';
+  
+    if (!value || !dataContext) return '';
+  
+    const dataView = grid.getData();
+    const data = dataView.getItems();
+    const identifierPropName = dataView.getIdPropertyName() || 'id';
+    const idx = dataView.getIdxById(dataContext[identifierPropName]) as number;
+    const treeLevel = dataContext[treeLevelPropName];
+    const spacer = `<span style="display:inline-block; width:${15 * treeLevel}px;"></span>`;
+  
+    const customFormatter = approversTreeFormatter(isReviewerSelectable, selectedUserNames, onUserClick, onUserGroupClick);
+    const customContent = customFormatter(_row, _cell, value, _columnDef, dataContext);
+  
+    const treeToggle = data[idx + 1]?.[treeLevelPropName] > data[idx][treeLevelPropName] || data[idx]['__hasChildren'];
+  
+    if (treeToggle) {
+      const collapsedClass = dataContext.__collapsed ? 'collapsed' : 'expanded';
+      const treeToggleIcon = `<span class="slick-group-toggle ${collapsedClass}" level="${treeLevel}"></span>`;
+      return `${spacer} ${treeToggleIcon} ${customContent.outerHTML}`;
+    }
+  
+    return `${spacer} ${customContent.outerHTML}`;
+  };
+};
+

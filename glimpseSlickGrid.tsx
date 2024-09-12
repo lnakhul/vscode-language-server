@@ -258,3 +258,27 @@ const treeFormatter = (
   };
 };
 
+-----------------------------------
+
+  // Force re-render of the grid when the component mounts or when approverGroups change
+  useEffect(() => {
+    const gridElement = document.getElementById("approversGrid");
+    if (gridElement) {
+      window.dispatchEvent(new Event('resize'));
+    }
+  }, [approverGroups]);
+
+  // Force re-render of the grid when the tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const gridElement = document.getElementById("approversGrid");
+      if (gridElement && !document.hidden) {
+        window.dispatchEvent(new Event('resize'));
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);

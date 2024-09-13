@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { SlickgridReact, Column, GridOption, Formatter, SlickgridReactInstance } from "slickgrid-react";
+import { SlickgridReact, Column, GridOption, Formatter, SlickgridReactInstance, SlickEventData } from "slickgrid-react";
 import { v4 as uuidv4 } from "uuid";
 import { SpinningIcon } from "./SpinningIcon";
 import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
@@ -49,36 +49,6 @@ const ApproversView: React.FC<ApproverViewProp> = ({
     return rows;
   }, [approverGroups]);
 
-  const columns: Column[] = [
-    { id: "name", name: "Name", field: "name", formatter: treeFormatter },
-  ];
-
-  const gridOptions: GridOption = {
-    enableCellNavigation: true,
-    enableColumnReorder: false,
-    syncColumnCellResize: true,
-    enableAutoTooltip: true,
-    enableHeaderMenu: false,
-    enableRowSelection: false,
-    showCellSelection: false,
-    enableContextMenu: false,
-    enableColumnPicker: false,
-    enableCheckboxSelector: false,
-    enableTreeData: true,
-    treeDataOptions: {
-      columnId: "name",
-      childrenPropName: "children",
-      parentPropName: "__parentId",
-      hasChildrenPropName: "__hasChildren",
-      initiallyCollapsed: false,
-    },
-    multiColumnSort: false,
-    enableFiltering: false,
-    enableSorting: false,
-  };
-
-  const reactGrid = useRef<SlickgridReactInstance>(null);
-
   // Define treeFormatter inside the component
   const treeFormatter: Formatter = (_row, _cell, value, _columnDef, dataContext, grid) => {
     const gridOptions = grid.getOptions();
@@ -123,12 +93,42 @@ const ApproversView: React.FC<ApproverViewProp> = ({
     return "";
   };
 
+  const columns: Column[] = [
+    { id: "name", name: "Name", field: "name", formatter: treeFormatter },
+  ];
+
+  const gridOptions: GridOption = {
+    enableCellNavigation: true,
+    enableColumnReorder: false,
+    syncColumnCellResize: true,
+    enableAutoTooltip: true,
+    enableHeaderMenu: false,
+    enableRowSelection: false,
+    showCellSelection: false,
+    enableContextMenu: false,
+    enableColumnPicker: false,
+    enableCheckboxSelector: false,
+    enableTreeData: true,
+    treeDataOptions: {
+      columnId: "name",
+      childrenPropName: "children",
+      parentPropName: "__parentId",
+      hasChildrenPropName: "__hasChildren",
+      initiallyCollapsed: false,
+    },
+    multiColumnSort: false,
+    enableFiltering: false,
+    enableSorting: false,
+  };
+
+  const reactGrid = useRef<SlickgridReactInstance>(null);
+
   // Set up event handlers
   useEffect(() => {
     const gridObj = reactGrid.current?.slickGrid;
     if (!gridObj) return;
 
-    const onGridClick = (e: Event, args: any) => {
+    const onGridClick = (e: SlickEventData, args: any) => {
       const target = e.target as HTMLElement;
       const dataContext = gridObj.getDataItem(args.row);
 
@@ -169,9 +169,14 @@ const ApproversView: React.FC<ApproverViewProp> = ({
       }
 
       // Handle expand/collapse clicks
-      if (target.matches(".slick-group-toggle")) {
-        gridObj.getData().collapseExpandItem(dataContext);
-        e.stopImmediatePropagation();
+      if (target.matches("span.slick-group-toggle")) {
+        const groupId = target.getAttribute("data-group-id");
+        const groupItem = findGroupById(groupId);
+        if (groupItem) {
+          groupItem.__collapsed = !groupItem.__collapsed;
+          gridObj.invalidate();
+          gridObj.render();
+        }
       }
     };
 

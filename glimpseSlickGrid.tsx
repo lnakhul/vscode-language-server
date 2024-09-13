@@ -194,3 +194,23 @@ const ApproversView: React.FC<ApproverViewProp> = ({
 };
 
 export default ApproversView;
+
+===============================
+
+ const handleUserGroupClick = (group: QuackApproverGroup, checked: boolean) => {
+    // Select all child approvers when a group is checked
+    group.approvers.forEach((approver) => {
+      const action = checked ? selectedUserNames.add(approver.userName) : selectedUserNames.delete(approver.userName);
+      if (onUserClick) onUserClick(approver, checked);
+    });
+    setSelectedUserNames(new Set(selectedUserNames)); // Update state to re-render
+  };
+
+  const handleUserClick = (approver: PathApprover, checked: boolean) => {
+    if (checked) {
+      selectedUserNames.add(approver.userName);
+    } else {
+      selectedUserNames.delete(approver.userName);
+    }
+    setSelectedUserNames(new Set(selectedUserNames)); // Update state to re-render
+  };

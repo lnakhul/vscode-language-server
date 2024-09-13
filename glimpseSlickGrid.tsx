@@ -108,3 +108,4 @@ const ApproverCell: React.FC<ApproverCellProps> = ({
       {content}
     </div>
   );
+};

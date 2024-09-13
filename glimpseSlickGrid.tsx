@@ -214,3 +214,36 @@ export default ApproversView;
     }
     setSelectedUserNames(new Set(selectedUserNames)); // Update state to re-render
   };
+
+
+================================
+
+const [selectedUserNames, setSelectedUserNames] = useState<Set<string>>(new Set(selectedUsers?.map(val => val.userName)));
+
+  useEffect(() => {
+    setSelectedUserNames(new Set(selectedUsers?.map(val => val.userName)));
+  }, [selectedUsers]);
+
+  const handleUserClick = (approver: PathApprover, checked: boolean) => {
+    const newSelectedUserNames = new Set(selectedUserNames);
+    if (checked) {
+      newSelectedUserNames.add(approver.userName);
+    } else {
+      newSelectedUserNames.delete(approver.userName);
+    }
+    setSelectedUserNames(newSelectedUserNames);
+    onUserClick?.(approver, checked);
+  };
+
+  const handleUserGroupClick = (group: QuackApproverGroup, checked: boolean) => {
+    const newSelectedUserNames = new Set(selectedUserNames);
+    group.approvers.forEach(approver => {
+      if (checked) {
+        newSelectedUserNames.add(approver.userName);
+      } else {
+        newSelectedUserNames.delete(approver.userName);
+      }
+    });
+    setSelectedUserNames(newSelectedUserNames);
+    onUserGroupClick?.(group, checked);
+  };

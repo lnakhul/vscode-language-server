@@ -1,14 +1,11 @@
-// ApproversListView.tsx
+import React, { useEffect, useMemo, useRef } from "react";
+import { SlickgridReact, Column, GridOption, Formatter, SlickgridReactInstance } from "slickgrid-react";
+import { v4 as uuidv4 } from "uuid";
+import { SpinningIcon } from "./SpinningIcon";
+import { PathApprover, QuackApproverGroup } from "./interfaces/interfaces";
+import { createCopyLink } from "../shared/sre/reactFunctions";
 
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { SlickgridReact, SlickgridReactInstance } from 'slickgrid-react';
-import { Column, GridOption, FieldType, Formatter, SlickEventData } from 'slickgrid-react';
-import { PathApprover, QuackApproverGroup } from './interfaces/interfaces';
-import { createCopyLink, userToLink } from '../shared/sre/reactFunctions';
-import './ApproversListView.scss'; // Include any necessary styles
-
-type ApproverViewProps = {
+type ApproverViewProp = {
   approverGroups?: QuackApproverGroup[];
   onUserClick?: (approver: PathApprover, checked: boolean) => void;
   onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
@@ -17,118 +14,113 @@ type ApproverViewProps = {
   onClickGroupLink?: (group: QuackApproverGroup) => void;
 };
 
-const ApproversView: React.FC<ApproverViewProps> = ({
+const ApproversView: React.FC<ApproverViewProp> = ({
   approverGroups,
+  selectedUsers,
+  isReviewerSelectable,
   onUserClick,
   onUserGroupClick,
-  isReviewerSelectable,
-  selectedUsers,
   onClickGroupLink,
 }) => {
-  const [columnDefinitions, setColumnDefinitions] = useState<Column[]>([]);
-  const [gridOptions, setGridOptions] = useState<GridOption>({});
-  const [datasetHierarchical, setDatasetHierarchical] = useState<any[]>([]);
+  if (!approverGroups) return <SpinningIcon iconName="refresh" spin={approverGroups === undefined} />;
+
+  const selectedUserNames = useMemo(() => new Set<string>(selectedUsers?.map((val) => val.userName)), [selectedUsers]);
+
+  const data = useMemo(() => {
+    const rows: any[] = [];
+    approverGroups?.forEach((group) => {
+      const groupId = uuidv4();
+      rows.push({
+        id: groupId,
+        name: group.roleName,
+        isGroup: true,
+        __hasChildren: true,
+        __collapsed: false, // You can set initial collapse state here
+        groupData: group,
+        children: group.approvers.map((approver) => ({
+          id: approver.userName, // Assuming userName is unique
+          name: approver.displayName,
+          __parentId: groupId,
+          isApprover: true,
+          approverData: approver,
+        })),
+      });
+    });
+    return rows;
+  }, [approverGroups]);
+
+  const columns: Column[] = [
+    { id: "name", name: "Name", field: "name", formatter: treeFormatter },
+  ];
+
+  const gridOptions: GridOption = {
+    enableCellNavigation: true,
+    enableColumnReorder: false,
+    syncColumnCellResize: true,
+    enableAutoTooltip: true,
+    enableHeaderMenu: false,
+    enableRowSelection: false,
+    showCellSelection: false,
+    enableContextMenu: false,
+    enableColumnPicker: false,
+    enableCheckboxSelector: false,
+    enableTreeData: true,
+    treeDataOptions: {
+      columnId: "name",
+      childrenPropName: "children",
+      parentPropName: "__parentId",
+      hasChildrenPropName: "__hasChildren",
+      initiallyCollapsed: false,
+    },
+    multiColumnSort: false,
+    enableFiltering: false,
+    enableSorting: false,
+  };
+
   const reactGrid = useRef<SlickgridReactInstance>(null);
 
-  // Create a set of selected user names for quick lookup
-  const selectedUsersSet = useMemo(() => new Set(selectedUsers?.map(user => user.userName)), [selectedUsers]);
-
-  // Prepare data and grid configurations
-  useEffect(() => {
-    setColumnDefinitions(getColumns());
-    setGridOptions(getGridOptions());
-    setDatasetHierarchical(prepareDataset(approverGroups));
-  }, [approverGroups, isReviewerSelectable]);
-
-  // Define treeFormatter inside the component so it has access to selectedUsersSet and isReviewerSelectable
-  const treeFormatter: Formatter = (_row, _cell, value, columnDef, dataContext, grid) => {
+  // Define treeFormatter inside the component
+  const treeFormatter: Formatter = (_row, _cell, value, _columnDef, dataContext, grid) => {
     const gridOptions = grid.getOptions();
-    const treeLevelPropName = gridOptions.treeDataOptions?.levelPropName || '__treeLevel';
+    const treeLevelPropName = gridOptions.treeDataOptions?.levelPropName || "__treeLevel";
     const treeLevel = dataContext[treeLevelPropName];
     const spacer = `<span style="display:inline-block; width:${15 * treeLevel}px;"></span>`;
 
-    // Determine if the item is a group or an approver
-    if (dataContext.children && dataContext.children.length > 0) {
-      // Group item
-      const folderIcon = dataContext.__collapsed ? 'mdi-folder' : 'mdi-folder-open';
-      // For copying initials, use dataContext.groupData.approvers.map(a => a.powwow).join('|')
-      const initials = dataContext.groupData.approvers.map((a: PathApprover) => a.powwow).join('|');
+    if (dataContext.isGroup) {
+      const initials = dataContext.groupData.approvers.map((x: PathApprover) => x.powwow).join("|");
       const tooltip = `Click to copy initials: ${initials}`;
+      const folderIcon = dataContext.__collapsed ? "mdi-folder" : "mdi-folder-open";
+      const isChecked = dataContext.groupData.approvers.every((approver: PathApprover) =>
+        selectedUserNames.has(approver.userName)
+      )
+        ? "checked"
+        : "";
+      const checkbox = isReviewerSelectable
+        ? `<input type="checkbox" data-group-id="${dataContext.id}" ${isChecked} />`
+        : "";
+
       return `
         ${spacer}
-        <span class="slick-group-toggle ${dataContext.__collapsed ? 'collapsed' : 'expanded'}" data-group-id="${dataContext.id}"></span>
+        <span class="slick-group-toggle ${dataContext.__collapsed ? "collapsed" : "expanded"}" data-group-id="${dataContext.id}"></span>
         <span class="mdi icon ${folderIcon}"></span>
+        ${checkbox}
         <span class="group-name" data-group-id="${dataContext.id}" title="${tooltip}">${value}</span>
       `;
-    } else {
-      // Approver item
-      const isChecked = selectedUsersSet.has(dataContext.userName) ? 'checked' : '';
-      const checkbox = isReviewerSelectable ? `<input type="checkbox" data-approver-id="${dataContext.userName}" ${isChecked} />` : '';
-      const approverName = dataContext.file; // displayName
-      const userName = dataContext.userName;
-      const powwow = dataContext.powwow;
-      // Display the approver information
+    } else if (dataContext.isApprover) {
+      const isChecked = selectedUserNames.has(dataContext.id) ? "checked" : "";
+      const checkbox = isReviewerSelectable
+        ? `<input type="checkbox" data-approver-id="${dataContext.id}" ${isChecked} />`
+        : "";
+      const approverName = dataContext.name;
+      const userName = dataContext.id;
+      const powwow = dataContext.approverData.powwow;
       return `
         ${spacer}
         ${checkbox}
         <span>${approverName} (${userName}) ${powwow}</span>
       `;
     }
-  };
-
-  // Define grid columns
-  const getColumns = (): Column[] => {
-    return [
-      {
-        id: 'file',
-        name: 'Name',
-        field: 'file',
-        type: FieldType.string,
-        width: 150,
-        formatter: treeFormatter,
-        filterable: false,
-        sortable: false,
-      },
-      // Add more columns if needed
-    ];
-  };
-
-  // Define grid options
-  const getGridOptions = (): GridOption => {
-    return {
-      enableTreeData: true,
-      treeDataOptions: {
-        columnId: 'file',
-        childrenPropName: 'children',
-      },
-      enableCheckboxSelector: false, // We'll handle checkboxes manually
-      enableFiltering: false,
-      enableSorting: false,
-      autoResize: {
-        container: '#approvers-grid-container',
-        rightPadding: 10,
-      },
-      headerRowHeight: 35,
-      rowHeight: 33,
-    };
-  };
-
-  // Prepare the hierarchical dataset
-  const prepareDataset = (approverGroups?: QuackApproverGroup[]) => {
-    if (!approverGroups) return [];
-    return approverGroups.map(group => ({
-      id: uuidv4(),
-      file: group.roleName,
-      groupData: group,
-      __collapsed: false, // initialize as not collapsed
-      children: group.approvers.map(approver => ({
-        id: approver.userName, // use userName as unique ID for approvers
-        file: approver.displayName,
-        userName: approver.userName,
-        powwow: approver.powwow,
-        approverData: approver,
-      })),
-    }));
+    return "";
   };
 
   // Set up event handlers
@@ -136,13 +128,23 @@ const ApproversView: React.FC<ApproverViewProps> = ({
     const gridObj = reactGrid.current?.slickGrid;
     if (!gridObj) return;
 
-    const onGridClick = (e: SlickEventData, args: any) => {
+    const onGridClick = (e: Event, args: any) => {
       const target = e.target as HTMLElement;
       const dataContext = gridObj.getDataItem(args.row);
 
-      // Handle checkbox clicks
+      // Handle checkbox clicks for groups
+      if (target.matches('input[type="checkbox"][data-group-id]')) {
+        const groupId = target.getAttribute("data-group-id");
+        const checked = (target as HTMLInputElement).checked;
+        const groupItem = findGroupById(groupId);
+        if (groupItem && onUserGroupClick) {
+          onUserGroupClick(groupItem.groupData, checked);
+        }
+      }
+
+      // Handle checkbox clicks for approvers
       if (target.matches('input[type="checkbox"][data-approver-id]')) {
-        const approverId = target.getAttribute('data-approver-id');
+        const approverId = target.getAttribute("data-approver-id");
         const checked = (target as HTMLInputElement).checked;
         const approverItem = findApproverById(approverId);
         if (approverItem && onUserClick) {
@@ -151,15 +153,14 @@ const ApproversView: React.FC<ApproverViewProps> = ({
       }
 
       // Handle group name clicks
-      if (target.matches('span.group-name[data-group-id]')) {
-        const groupId = target.getAttribute('data-group-id');
+      if (target.matches("span.group-name[data-group-id]")) {
+        const groupId = target.getAttribute("data-group-id");
         const groupItem = findGroupById(groupId);
         if (groupItem) {
-          const initials = groupItem.groupData.approvers.map((a: PathApprover) => a.powwow).join('|');
+          const initials = groupItem.groupData.approvers.map((a: PathApprover) => a.powwow).join("|");
           // Copy initials to clipboard
           navigator.clipboard.writeText(initials).then(() => {
-            // Optionally show a success message
-            console.log('Initials copied to clipboard:', initials);
+            console.log("Initials copied to clipboard:", initials);
           });
           if (onClickGroupLink) {
             onClickGroupLink(groupItem.groupData);
@@ -168,31 +169,27 @@ const ApproversView: React.FC<ApproverViewProps> = ({
       }
 
       // Handle expand/collapse clicks
-      if (target.matches('.slick-group-toggle')) {
-        const groupId = target.getAttribute('data-group-id');
-        const groupItem = findGroupById(groupId);
-        if (groupItem) {
-          groupItem.__collapsed = !groupItem.__collapsed;
-          gridObj.invalidate();
-          gridObj.render();
-        }
+      if (target.matches(".slick-group-toggle")) {
+        gridObj.getData().collapseExpandItem(dataContext);
+        e.stopImmediatePropagation();
       }
     };
 
     gridObj.onClick.subscribe(onGridClick);
 
-    // Cleanup on unmount
     return () => {
       gridObj.onClick.unsubscribe(onGridClick);
     };
-  }, [reactGrid.current, onUserClick, onClickGroupLink, selectedUsersSet]);
+  }, [reactGrid.current, onUserClick, onUserGroupClick, onClickGroupLink, selectedUserNames]);
 
   // Helper function to find an approver by ID
   const findApproverById = (id: string | null) => {
     if (!id) return null;
-    for (const group of datasetHierarchical) {
-      const approver = group.children.find((approver: any) => approver.userName === id);
-      if (approver) return approver;
+    for (const group of data) {
+      if (group.isGroup && group.children) {
+        const approver = group.children.find((approver: any) => approver.id === id);
+        if (approver) return approver;
+      }
     }
     return null;
   };
@@ -200,17 +197,17 @@ const ApproversView: React.FC<ApproverViewProps> = ({
   // Helper function to find a group by ID
   const findGroupById = (id: string | null) => {
     if (!id) return null;
-    return datasetHierarchical.find(group => group.id === id) || null;
+    return data.find((group) => group.id === id && group.isGroup) || null;
   };
 
   return (
-    <div id="approvers-grid-container" style={{ width: '100%', height: '500px' }}>
+    <div id="approvers-grid-container" style={{ width: "100%", height: "500px" }}>
       <SlickgridReact
         ref={reactGrid}
         gridId="approversGrid"
-        columnDefinitions={columnDefinitions}
+        columnDefinitions={columns}
         gridOptions={gridOptions}
-        datasetHierarchical={datasetHierarchical}
+        dataset={data}
       />
     </div>
   );

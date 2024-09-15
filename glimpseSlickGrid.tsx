@@ -28,6 +28,10 @@ const styles = StyleSheet.create({
   approverListStyle: {
     listStyle: "none",
     paddingLeft: "20px"
+  },
+  toggleIcon: {
+    marginRight: "5px",
+    cursor: "pointer"
   }
 });
 
@@ -93,14 +97,26 @@ const ApproverListView: React.FC<ApproverListProp> = ({ group, render, onSelectG
       onSelectGroup?.(group, !checked);
   };
 
+  const onToggleIconClick = (evt: React.MouseEvent<HTMLElement>) => {
+      evt.stopPropagation(); // Prevent triggering the group click event
+      setIsExpanded(!isExpanded);
+  };
+
   const onGroupClick = (evt: React.MouseEvent<HTMLDivElement>) => {
       onClickGroupLink?.(group);
-      setIsExpanded(!isExpanded);
   };
 
   return (
       <div>
-        <span>{onSelectGroup && <VSCodeCheckbox checked={checked} onClick={onToggleGroupChecked} />}<FormLabel style={styles.groupHeader} onClick={onGroupClick}>{createCopyLink(roleName, initials, tooltip)}</FormLabel></span>
+        <span>
+          <span className={css(styles.toggleIcon)} onClick={onToggleIconClick}>
+            {isExpanded ? '▼' : '▶'}
+          </span>
+          {onSelectGroup && <VSCodeCheckbox checked={checked} onClick={onToggleGroupChecked} />}
+          <FormLabel style={styles.groupHeader} onClick={onGroupClick}>
+            {createCopyLink(roleName, initials, tooltip)}
+          </FormLabel>
+        </span>
         {isExpanded && (
           <ul className={css(styles.approverListStyle)}>
               {approvers.map(render)}

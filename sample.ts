@@ -153,3 +153,33 @@ async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
 
 ========================================================
 
+
+    // Helper function to find the selected bookmark
+private findBookmark(bookmarks: Bookmark[], selected: vscode.QuickPickItem): Bookmark | undefined {
+    return bookmarks.find(({ path, line }) => `${pathModule.basename(path)}:${line}` === selected.label);
+}
+
+async listBookmarksFromAllFiles(): Promise<void> {
+  const bookmarks = this.getSortedBookmarks();
+  
+  if (!bookmarks.length) {
+    vscode.window.showInformationMessage('No bookmarks available.');
+    return;
+  }
+
+  const items = this.createQuickPickItems(bookmarks);  // Create quick pick items
+
+  const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Select a bookmark to open',
+      matchOnDescription: true,
+      matchOnDetail: true
+  });
+
+  // Open the selected bookmark, if any
+  if (selected) {
+    const bookmark = this.findBookmark(bookmarks, selected);
+    if (bookmark) {
+      await this.openBookmark(bookmark);
+    }
+  }
+}

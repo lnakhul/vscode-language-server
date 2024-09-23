@@ -152,7 +152,13 @@ async handleDocumentChange(e: vscode.TextDocumentChangeEvent): Promise<void> {
 }
 
 ========================================================
-
+private createQuickPickItems(bookmarks: Bookmark[]): vscode.QuickPickItem[] {
+    return bookmarks.map(({ path, line, content }) => ({
+        label: `${pathModule.basename(path)}:${line}`,
+        description: content || '',
+        detail: path
+    }));
+}
 
     // Helper function to find the selected bookmark
 private findBookmark(bookmarks: Bookmark[], selected: vscode.QuickPickItem): Bookmark | undefined {

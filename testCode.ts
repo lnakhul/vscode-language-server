@@ -27,3 +27,43 @@
                                 });
                             }());
                         </script>
+
+
+
+
+<script>
+    (function() {
+        const vsCodeApi = acquireVsCodeApi();   // Provided by VS Code Webview
+        const iframe = document.getElementById('hostedContent');
+
+        // This parent 'load' event ensures our script runs after
+        // the webview body loads, but not necessarily the iframe content.
+        window.addEventListener('load', () => {
+            if (!iframe) return;
+
+            // Wait for the iframe itself to load (i.e. the Sphinx doc).
+            iframe.addEventListener('load', () => {
+                // Access the iframe's document and attach mouse events
+                const iframeDoc = iframe.contentWindow?.document;
+                if (!iframeDoc) {
+                    console.log("iframe.contentWindow.document is null (possibly cross-origin?)");
+                    return;
+                }
+
+                iframeDoc.addEventListener('mouseover', (e) => {
+                    const a = e.target.closest('a');
+                    if (a && a.href) {
+                        console.log('Hovering link in iframe:', a.href);
+                        vsCodeApi.postMessage({ command: 'hoverLink', url: a.href });
+                    }
+                });
+
+                iframeDoc.addEventListener('mouseout', (e) => {
+                    if (e.target.tagName === 'A') {
+                        vsCodeApi.postMessage({ command: 'hoverLink', url: '' });
+                    }
+                });
+            });
+        });
+    })();
+    </script>

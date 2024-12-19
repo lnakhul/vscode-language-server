@@ -67,3 +67,28 @@
         });
     })();
     </script>
+
+
+====================================
+
+const iframe = document.getElementById('hostedContent');
+                            iframe.addEventListener('load', () => {
+                                try {
+                                    const doc = iframe.contentDocument;
+                                    if (doc) {
+                                        const links = doc.querySelectorAll('a[href]');
+                                        for (const link of links) {
+                                            const href = link.getAttribute('href');
+                                            if (href && !link.hasAttribute('title')) {
+                                                link.setAttribute('title', href);
+                                            }
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error('Unable to set link tooltips', e);
+                                }
+                            });
+
+                            window.addEventListener('load', (event) => {
+                                vsCodeApi.postMessage({ command: 'done' });
+                            });

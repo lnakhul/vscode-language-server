@@ -117,3 +117,67 @@ const iframe = document.getElementById('hostedContent');
                         }
                     });
                 </script>
+
+
+=====================================
+
+def inject_tooltip_script(self):
+        """Inject tooltip script and styles into the generated HTML files."""
+        tooltip_script = """
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tooltip = document.createElement('div');
+            tooltip.id = 'tooltip';
+            tooltip.style.position = 'absolute';
+            tooltip.style.backgroundColor = '#333';
+            tooltip.style.color = '#fff';
+            tooltip.style.padding = '5px';
+            tooltip.style.borderRadius = '5px';
+            tooltip.style.display = 'none';
+            tooltip.style.zIndex = '1000';
+            document.body.appendChild(tooltip);
+
+            document.addEventListener('mouseover', (event) => {
+                if (event.target.tagName === 'A') {
+                    const href = event.target.getAttribute('href');
+                    tooltip.textContent = href;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.pageX + 'px';
+                    tooltip.style.top = event.pageY + 'px';
+                }
+            });
+
+            document.addEventListener('mouseout', (event) => {
+                if (event.target.tagName === 'A') {
+                    tooltip.style.display = 'none';
+                }
+            });
+        });
+        </script>
+        """
+        tooltip_style = """
+        <style>
+        #tooltip {
+            position: absolute;
+            background-color: #333;
+            color: #fff;
+            padding: 5px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+        }
+        </style>
+        """
+        for root, _, files in os.walk(self.target):
+            for file in files:
+                if file.endswith('.html'):
+                    file_path = os.path.join(root, file)
+                    with open(file_path, 'r+', encoding='utf-8') as f:
+                        content = f.read()
+                        if '</body>' in content:
+                            content = content.replace('</body>', f'{tooltip_script}</body>')
+                        if '</head>' in content:
+                            content = content.replace('</head>', f'{tooltip_style}</head>')
+                        f.seek(0)
+                        f.write(content)
+                        f.truncate()

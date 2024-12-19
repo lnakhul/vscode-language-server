@@ -92,3 +92,28 @@ const iframe = document.getElementById('hostedContent');
                             window.addEventListener('load', (event) => {
                                 vsCodeApi.postMessage({ command: 'done' });
                             });
+
+============================================================
+
+<script nonce="${nonce}">
+                    document.addEventListener('DOMContentLoaded', () => {
+                        const iframe = document.querySelector('iframe');
+                        const tooltip = document.getElementById('tooltip');
+                        if (iframe) {
+                            iframe.contentWindow.addEventListener('mouseover', (event) => {
+                                if (event.target.tagName === 'A') {
+                                    const href = event.target.getAttribute('href');
+                                    tooltip.textContent = href;
+                                    tooltip.style.display = 'block';
+                                    tooltip.style.left = event.pageX + 'px';
+                                    tooltip.style.top = event.pageY + 'px';
+                                }
+                            });
+                            iframe.contentWindow.addEventListener('mouseout', (event) => {
+                                if (event.target.tagName === 'A') {
+                                    tooltip.style.display = 'none';
+                                }
+                            });
+                        }
+                    });
+                </script>

@@ -181,3 +181,115 @@ def inject_tooltip_script(self):
                         f.seek(0)
                         f.write(content)
                         f.truncate()
+=========================================
+
+// ...existing code...
+
+export class ReactWebviewService implements vscode.WebviewPanelSerializer {
+    // ...existing code...
+
+    async openLocalSphinx(localPath: string, options: {title: string, identifier: string, iconPath: ThemedUriIcon}): Promise<vscode.WebviewPanel|undefined> {
+        const srcUri = this.httpServer.getSphinxHtml(localPath);
+        if (!srcUri) {
+            logMessageWithNotification({ message: `Unable to get Sphinx HTML URI for ${localPath}`, level: 'error' });
+            return;
+        }
+
+        const htmlContent = await this.fetchSphinxHtmlContent(srcUri.toString(true));
+        return await this.openLocalHtmlContent(htmlContent, options);
+    }
+
+    private async fetchSphinxHtmlContent(uri: string): Promise<string> {
+        const response = await fetch(uri);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch Sphinx HTML content from ${uri}`);
+        }
+        return await response.text();
+    }
+
+    private async openLocalHtmlContent(htmlContent: string, options: {title: string, identifier: string, iconPath?: ThemedUriIcon}): Promise<vscode.WebviewPanel|undefined> {
+        const localResourceRoots = defaultLocalResourceRoots(this.context);
+        const webviewOptions: vscode.WebviewPanelOptions & vscode.WebviewOptions = {
+            enableScripts: true,
+            enableCommandUris: false,
+            localResourceRoots,
+        };
+        const { title, identifier, iconPath, onDispose } = options;
+
+        try {
+            return await vscode.window.withProgress<vscode.WebviewPanel>({
+                title: `Loading ${title}...`,
+                location: vscode.ProgressLocation.Notification
+            }, async (progress, token) => {
+                return await new Waiter({ token }).wait<vscode.WebviewPanel>((resolve, reject, register) => {
+                    const panel = vscode.window.createWebviewPanel(`${identifier}`, title, 1, webviewOptions);
+                    this.capturePanel(panel);
+                    panel.iconPath = iconPath;
+                    const webview = panel.webview;
+                    register(webview.onDidReceiveMessage((message: { command: string, error?: string }) => {
+                        switch (message.command) {
+                            case 'done':
+                                resolve(panel);
+                                return;
+                            case 'error':
+                                reject(new Error(message.error ?? `Unable to load profile for ${identifier}`));
+                                return;
+                            default:
+                                return;
+                        }
+                    }), panel.onDidDispose(() => {
+                        onDispose?.();
+                        reject();
+                    }));
+                    const nonce = makeNonce();
+                    panel.webview.html = `<!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src ${webview.cspSource}; font-src ${webview.cspSource} https://fonts.gstatic.com/; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} https://fonts.googleapis.com/ 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
+                        <style>
+                            #tooltip {
+                                position: absolute;
+                                background-color: #333;
+                                color: #fff;
+                                padding: 5px;
+                                border-radius: 5px;
+                                display: none;
+                                z-index: 1000;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        ${htmlContent}
+                        <div id="tooltip"></div>
+                        <script nonce="${nonce}">
+                            document.addEventListener('DOMContentLoaded', () => {
+                                const tooltip = document.getElementById('tooltip');
+                                document.addEventListener('mouseover', (event) => {
+                                    if (event.target.tagName === 'A') {
+                                        const href = event.target.getAttribute('href');
+                                        tooltip.textContent = href;
+                                        tooltip.style.display = 'block';
+                                        tooltip.style.left = event.pageX + 'px';
+                                        tooltip.style.top = event.pageY + 'px';
+                                    }
+                                });
+                                document.addEventListener('mouseout', (event) => {
+                                    if (event.target.tagName === 'A') {
+                                        tooltip.style.display = 'none';
+                                    }
+                                });
+                            });
+                        </script>
+                    </body>
+                    </html>`;
+                });
+            });
+        } catch (e) {
+            logMessageWithNotification({ message: `Unable to load profile for ${identifier} due to ${(e as Error).message}`, level: 'error' });
+        }
+    }
+
+    // ...existing code...
+}

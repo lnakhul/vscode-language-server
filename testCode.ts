@@ -163,3 +163,23 @@ content = content.replace(
     </body>`
   );
 
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const vsCodeApi = acquireVsCodeApi();
+    // For each anchor that starts with http...
+    document.querySelectorAll('a[href^="http"]').forEach(a => {
+      a.addEventListener('click', function(evt) {
+        evt.preventDefault();
+        // Only do the postMessage approach
+        vsCodeApi.postMessage({
+          type: 'command',
+          command: 'openExternal',
+          args: [ a.href ]
+        });
+      });
+    });
+  });
+</script>
+
+

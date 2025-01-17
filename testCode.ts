@@ -182,4 +182,15 @@ content = content.replace(
   });
 </script>
 
+========================
+
+// 1) Remove any "target=..." from external links
+content = content.replace(
+  /<a\b([^>]*?)href\s*=\s*["'](https?:\/\/[^"']+)["']([^>]*)>/gi,
+  (fullMatch, beforePart, theHref, afterPart) => {
+    // Remove any target="_blank" or target="someVal"
+    const removedTarget = fullMatch.replace(/\s*target=["'][^"']*["']/gi, '');
+    return removedTarget;
+  }
+);
 

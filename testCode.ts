@@ -132,3 +132,34 @@ content = content.replace(
      </body>`
   );
 
+
+
+================================
+
+content = content.replace(
+    /<\/body>/i,
+    `<script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // Acquire the VS Code API for messaging
+        const vsCodeApi = window.acquireVsCodeApi?.();
+        // Intercept any link that begins with "http" or "https"
+        document.querySelectorAll('a[href^="http"]').forEach(a => {
+          a.addEventListener('click', evt => {
+            evt.preventDefault();
+            if (vsCodeApi) {
+              vsCodeApi.postMessage({
+                type: 'command',
+                command: 'openExternal',
+                args: [ a.href ]  // pass the link to the extension
+              });
+            } else {
+              // Fallback if vsCodeApi not found
+              window.open(a.href, '_blank');
+            }
+          });
+        });
+      });
+    </script>
+    </body>`
+  );
+

@@ -57,3 +57,43 @@ export class HttpServer {
 
   // ...
 }
+
+
+=================================================================
+
+// localHttpServer.ts (relevant excerpt)
+async loadHtmlContent(localPath: string): Promise<ContentRespInfo> {
+  const ext = path.extname(localPath);
+  const contentType = this.getContentType(ext);
+
+  // 1. Read file and decode to string
+  const fileContents = await vscode.workspace.fs.readFile(vscode.Uri.file(localPath));
+  let content = new TextDecoder('utf-8').decode(fileContents);
+
+  // 2. If this is an HTML file, inject the snippet
+  if (ext === '.html') {
+    // Inject a script before the closing </body> tag
+    content = content.replace(
+      /<\/body>/i,
+      `<script>
+         (function() {
+           window.addEventListener('DOMContentLoaded', function() {
+             var anchors = document.querySelectorAll('a[href]');
+             anchors.forEach(function(a) {
+               // If there's no existing title, set it to the href
+               if (!a.hasAttribute('title')) {
+                 a.setAttribute('title', a.href);
+               }
+             });
+           });
+         })();
+       </script>
+       </body>`
+    );
+  }
+
+  // 3. Stream the final content back
+  const stream = Stream.Readable.from(content);
+  return { contentType, stream };
+}
+

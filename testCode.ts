@@ -20,3 +20,11 @@ content = content.replace(
   </script>
   </body>`
 );
+
+private addTitleToLinks(content: string): string {
+    return content.replace(
+        /<a\b([^>]*?)href\s*=\s*["']([^"']+)["']([^>]*)>/gi,
+        (fullMatch, beforeHref, theHref, afterHref) =>
+            /\btitle\s*=/i.test(fullMatch) ? fullMatch : `<a ${beforeHref}href="${theHref}" title="${theHref}"${afterHref}>`
+    );
+}

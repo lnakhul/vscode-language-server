@@ -97,3 +97,38 @@ async loadHtmlContent(localPath: string): Promise<ContentRespInfo> {
   return { contentType, stream };
 }
 
+
+======================================
+
+content = content.replace(
+    /<\/body>/i,
+    `<script>
+       (function() {
+         document.addEventListener('DOMContentLoaded', function() {
+           const vsCodeApi = window.acquireVsCodeApi ? window.acquireVsCodeApi() : undefined;
+           
+           // Select all <a> that begin with "http://" or "https://"
+           // i.e. fully external URLs.
+           // Feel free to refine this if you want to exclude certain domains.
+           document.querySelectorAll('a[href^="http"]').forEach(function(a) {
+             a.addEventListener('click', function(evt) {
+               // Prevent navigation in the iframe
+               evt.preventDefault();
+               if (vsCodeApi) {
+                 // Post message to the extension, requesting it open the link externally
+                 vsCodeApi.postMessage({
+                   command: 'openExternal',
+                   url: a.href
+                 });
+               } else {
+                 // Fallback: if no vsCodeApi, try normal popup
+                 window.open(a.href, '_blank');
+               }
+             });
+           });
+         });
+       })();
+     </script>
+     </body>`
+  );
+

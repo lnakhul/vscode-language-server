@@ -1,28 +1,48 @@
+import { ExtensionStorage } from "./localStorage";
+
+const GRID_SETTINGS_KEY = "slickgrid_settings";
+
+/**
+ * Save grid settings to local storage.
+ * @param gridId - Unique identifier for the grid.
+ * @param settings - The settings to save.
+ */
+export async function saveGridSettings(gridId: string, settings: any) {
+    const storage = ExtensionStorage.getInstance();
+    const allSettings = (await storage.get(GRID_SETTINGS_KEY, {})) as Record<string, any>;
+    allSettings[gridId] = settings;
+    await storage.update(GRID_SETTINGS_KEY, allSettings);
+}
+
+/**
+ * Load grid settings from local storage.
+ * @param gridId - Unique identifier for the grid.
+ * @returns The saved settings or null if not found.
+ */
+export async function loadGridSettings(gridId: string): Promise<any | null> {
+    const storage = ExtensionStorage.getInstance();
+    const allSettings = (await storage.get(GRID_SETTINGS_KEY, {})) as Record<string, any>;
+    return allSettings[gridId] || null;
+}
+
+
+=====================================
+
 useEffect(() => {
-        // Load grid state from the central Map
-        const savedState = loadGridStateFromMap(griId);
-        if (gridRef.current && savedState) {
-            gridRef.current.columnDefinitions = savedState.columns;
-            gridRef.current.gridOptions = { ...gridRef.current.gridOptions, ...savedState.options };
-        }
-
-        const grid = gridRef.current?.slickGridInstance;
-
-        // Subscribe to grid state changes
-        const handleGridStateChanged = (e: CustomEvent<{ gridState: GridState; change: { type: string; newValues: any } }>) => {
-            const { gridState, change } = e.detail;
-            if (change.type === "columns") {
-                const state = {
-                    columns: gridState.columns,
-                    options: gridRef.current?.gridOptions,
-                };
-                saveGridStateToMap(griId, state);
+        // Load saved settings and apply them to the grid
+        const applySavedSettings = async () => {
+            const savedSettings = await loadGridSettings(gridId);
+            if (savedSettings && gridRef.current) {
+                // Apply settings to the grid (e.g., column sizes)
+                gridRef.current.applyColumnWidths(savedSettings.columnWidths);
             }
         };
+        applySavedSettings();
+    }, [gridId]);
 
-        grid?.onColumnsResized.subscribe(handleGridStateChanged);
-
-        return () => {
-            grid?.onColumnsResized.unsubscribe(handleGridStateChanged);
-        };
-    }, [rows]);
+    const handleGridStateChange = () => {
+        if (gridRef.current) {
+            const columnWidths = gridRef.current.getColumns().map((col) => col.width);
+            saveGridSettings(gridId, { columnWidths });
+        }
+    };

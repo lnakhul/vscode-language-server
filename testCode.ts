@@ -1,50 +1,172 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import { SlickgridReact, Column, GridOption, GridState } from "slickgrid-react";
+import ".../css//slickGrid.css";
+import React, { useEffect, useRef, useCallback, useMemo } from "react";
+import { SlickgridReact, Column, GridOption, GridState, SlickGrid, SlickgridReactInstance, EmitterType } from "slickgrid-react";
 import { v4 as uuidv4 } from "uuid";
 import { LoadingElement } from "./SharedComponents";
 import ReactDOM from "react-dom";
 import { SlickGridContainer } from "./SlickGridContainer";
-import { ExtensionStorage } from "../storage/localStorage"; // Adjust the import path as needed
+import { usePersistentState, useWebviewState, useVsCodeApi } from "../components/VsCodeExtensionContext";
 
-// ... (other imports and interfaces)
+const CvsDiffTypes = ["Submitted", "APPROVED", "PROD"] as const;
+type CvsDiffType = typeof CvsDiffTypes[number];
+
+const CVSTags = ["APPROVED", "PROD"] as const;
+type CVSTag = typeof CVSTags[number];
+
+interface PathPatchInfo {
+    url: string;
+    rev: string;
+    modified: boolean;
+    deleted: boolean;
+    tags?: { [key in CvsDiffType]?: string };
+}
+
+interface ReviewPatchInfo {
+    diff: string[];
+    files: PathPatchInfo[];
+}
+
+interface PathGridRowData {
+    id?: string;
+    path: string;
+    rev: string | undefined;
+    diffTag: string;
+    diffRev?: string;
+    modified: boolean;
+    iml?: boolean;
+    [key: string]: string | boolean | undefined;
+}
+
+type PathInfo = {
+    path: string;
+    rev: string | undefined;
+    diffRev: string | CVSTag | undefined;
+    precommit: boolean;
+    deleted: boolean;
+    reviewId: number;
+    diffType: CvsDiffType;
+};
+
+function convertRevToStringValue(rev: string | undefined, modified: boolean): string {
+    return `${rev || "New"}${modified ? "*" : ""}`;
+}
+
+function renderElement(jsx: React.ReactElement, elementContainer?: HTMLElement): HTMLElement {
+    const container = elementContainer ?? document.createElement("div");
+    const root = ReactDOM.createRoot(container);
+    root.render(jsx);
+    return root.childElementCount === 1 ? root.childElements[0] : container;
+}
+
+function useResizeSlickGridOnShown(elementId: string) {
+    const resizeDispatched = useRef(false);
+    useEffect(() => {
+        const targetNode = document.getElementById(elementId);
+        const observer = new MutationObserver(() => {
+            if (!targetNode?.hidden && !resizeDispatched.current) {
+                window.dispatchEvent(new Event("resize"));
+                resizeDispatched.current = true;
+            } else if (targetNode?.hidden) {
+                resizeDispatched.current = false;
+            }
+        });
+        observer.observe(document.body, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+        });
+        return () => observer.disconnect();
+    }, []);
+    return resizeDispatched.current;
+}
+
+export function convertPathInfoToFileRowData(pathInfos: PathInfo[]): PathGridRowData[] {
+    return pathInfos.map((pathInfo) => (
+        {
+            id: uuidv4(),
+            path: pathInfo.path,
+            rev: pathInfo.rev,
+            diffRev: pathInfo.diffRev ?? "None",
+            diffTag: pathInfo.diffType,
+            modified: pathInfo.precommit,
+        }
+    ));
+}
+
+export function convertReviewPatchInfoToFileRowData(data: ReviewPatchInfo, diffTag: string): PathGridRowData[] {
+    return data.files.map((pathInfo) => (
+        {
+            id: uuidv4(),
+            path: pathInfo.url.slice(3),
+            rev: pathInfo.rev,
+            diffTag: diffTag,
+            modified: pathInfo.modified,
+        }
+    ));
+}
+
+const checkboxFormatter = (_row: number, _cell: number, value: any, _columnDef: any, _dataContext: any) => {
+    const checkbox = (<input type="checkbox" checked={value} disabled={true} className="disabled-checkbox" />);
+    return renderElement(checkbox);
+};
+
+type PathNavigationElementProps = {
+    path: string;
+    tag: string;
+    row: PathGridRowData;
+    style?: any;
+    onClick: (val: PathGridRowData) => Promise<void>;
+};
+
+const PathNavigationElement = ({ path, tag, onClick, row }: PathNavigationElementProps): HTMLElement => {
+    const pathNavElement = document.createElement("a");
+    pathNavElement.href = "#";
+    pathNavElement.textContent = path;
+    pathNavElement.title = `Navigate to diff page for ${path} against ${tag}`;
+    pathNavElement.onclick = (e) => {
+        e.preventDefault();
+        onClick(row);
+    };
+    return pathNavElement;
+}
+
+export type PathGridColumn = {
+    header: string;
+    key: keyof PathGridRowData;
+};
+
+type PathsGridProps = {
+    columnOrder: PathGridColumn[];
+    tabPanelId?: string;
+    label: string;
+    imlFiles?: string[];
+    onClickPath: (rowData: PathGridRowData) => Promise<void>;
+    rows?: PathGridRowData[];
+    diffCvsTag: string;
+    loading: boolean;
+    loadingLabel: string;
+};
+
+export const IMHeader = (): string => {
+    return `<span><a href={IML_DOC_LINK} title='If this is checked, files are running with "ImportMode: Latest" mode, click on the link to navigate to documentation'>IML</a></span>`;
+};
 
 export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
     const { columnOrder, label, imlFiles, rows, diffCvsTag, onClickPath, loading, loadingLabel, tabPanelId } = props;
     const gridRef = useRef<SlickgridReact | null>(null);
     const griId = `path_grid_${label}`;
     const elementId = tabPanelId || griId;
-    const extensionStorage = ExtensionStorage.getInstance(); // Get the instance of ExtensionStorage
-
     useResizeSlickGridOnShown(elementId);
+
+    const initialState = { columnOrder, rows };
+    const [state, updateState, resetState] = usePersistentState("pathsGrid", initialState);
+    const [presets, updatePresets] = useWebviewState<GridState>("pathsGridPresets", {});
 
     useEffect(() => {
         if (gridRef.current && rows) {
             gridRef.current.dataset = rows;
         }
     }, [rows]);
-
-    const saveGridState = useCallback((gridState: GridState) => {
-        extensionStorage.update(`gridState_${griId}`, gridState);
-    }, [extensionStorage, griId]);
-
-    const loadGridState = useCallback(() => {
-        return extensionStorage.get<GridState>(`gridState_${griId}`, {});
-    }, [extensionStorage, griId]);
-
-    const onGridCreated = useCallback((event: CustomEvent<{ slickGrid: SlickGrid }>) => {
-        const grid = event.detail.slickGrid;
-        const savedState = loadGridState();
-        if (savedState.columns) {
-            grid.setColumns(savedState.columns);
-        }
-        if (savedState.rowSelection) {
-            grid.setSelectedRows(savedState.rowSelection.dataContextIds);
-        }
-    }, [loadGridState]);
-
-    const onGridStateChanged = useCallback((event: CustomEvent<{ gridState: GridState }>) => {
-        saveGridState(event.detail.gridState);
-    }, [saveGridState]);
 
     if (!rows || loading) return <LoadingElement label={loadingLabel} />;
 
@@ -88,6 +210,41 @@ export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
         enableColumnPicker: false,
         enableGridMenu: false,
     };
+
+    const onGridCreated = (event: CustomEvent<SlickgridReactInstance>) => {
+        const grid = event.detail.slickGrid;
+        gridRef.current = grid;
+        const sorters = presets.sorters;
+
+        if (sorters?.length) {
+            const sorter = sorters[0];
+            const { columnId, direction } = sorter;
+            const sortDirection = direction.toLowerCase();
+            grid.setSortColumn(columnId, sortDirection === 'asc');
+        }
+
+        const { activeSelection } = state;
+        if (activeSelection) {
+            const dataView = grid.getData();
+            const row = dataView.getRowById(activeSelection);
+            if (row !== undefined) {
+                grid.setSelectedRows([row]);
+                grid.setActiveCell(row, 0);
+                grid.scrollRowIntoView(row);
+            }
+        }
+    };
+
+    const onGridStateChanged = (e: CustomEvent<{ gridState: GridState, change: { type: string, newValues: any } }>) => {
+        updatePresets(e.detail.gridState);
+    };
+
+    const vsCodeApi = useVsCodeApi({
+        resetState: resetState,
+        update: (newStateUpdate: Partial<typeof initialState>) => {
+            updateState(newStateUpdate);
+        },
+    });
 
     return (
         <SlickGridContainer>

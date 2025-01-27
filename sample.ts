@@ -249,3 +249,32 @@ export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
 };
 
 export default PathsGrid;
+
+
+=========================
+
+/**
+ * Map CurrentColumn[] to Column[] by ensuring required properties are present.
+ * @param currentColumns - The current columns from the grid state
+ * @param originalColumns - The original columns used to create the grid
+ * @returns Column[] - Columns compatible with grid.setColumns()
+ */
+function mapCurrentColumnsToColumns(
+    currentColumns: CurrentColumn[],
+    originalColumns: Column[]
+): Column[] {
+    return currentColumns.map((currentCol) => {
+        // Find the corresponding original column to get the required properties
+        const originalCol = originalColumns.find((col) => col.id === currentCol.id);
+        if (!originalCol) {
+            throw new Error(`Column with id ${currentCol.id} not found in original columns`);
+        }
+
+        // Merge the current column state with the original column definition
+        return {
+            ...originalCol, // Retain all properties from the original column
+            width: currentCol.width, // Apply the current width
+            // Add other properties from currentCol if needed
+        };
+    });
+}

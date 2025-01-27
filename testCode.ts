@@ -262,3 +262,16 @@ export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
 };
 
 export default PathsGrid;
+
+========================
+
+const handleColumnResize = useCallback((e: Event, args: { column: Column }) => {
+        const { column } = args;
+        updateState((prevState) => ({
+            ...prevState,
+            columnWidths: {
+                ...prevState.columnWidths,
+                [column.id]: column.width,
+            },
+        }));
+    }, [updateState]);

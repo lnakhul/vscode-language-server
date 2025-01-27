@@ -1,61 +1,107 @@
-// reactFunctions.ts
-import { ExtensionStorage } from "../path/to/localStorage";
-import { SlickgridReactInstance, GridStateChange } from "slickgrid-react";
+import React, { useEffect, useRef, useCallback } from "react";
+import { SlickgridReact, Column, GridOption, GridState } from "slickgrid-react";
+import { v4 as uuidv4 } from "uuid";
+import { LoadingElement } from "./SharedComponents";
+import ReactDOM from "react-dom";
+import { SlickGridContainer } from "./SlickGridContainer";
+import { ExtensionStorage } from "../storage/localStorage"; // Adjust the import path as needed
 
-/**
- * Save the given grid state to extension storage, under some unique key
- */
-export async function saveGridSettings(gridKey: string, gridState: any): Promise<void> {
-  // the extensionStorage is typically a singleton
-  const extensionStorage = ExtensionStorage.getInstance();
-  await extensionStorage.update(gridKey, gridState);
-}
+// ... (other imports and interfaces)
 
-/**
- * Load the grid state from extension storage, if it exists
- */
-export function loadGridSettings(gridKey: string): any | undefined {
-  const extensionStorage = ExtensionStorage.getInstance();
-  return extensionStorage.get(gridKey);
-}
+export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
+    const { columnOrder, label, imlFiles, rows, diffCvsTag, onClickPath, loading, loadingLabel, tabPanelId } = props;
+    const gridRef = useRef<SlickgridReact | null>(null);
+    const griId = `path_grid_${label}`;
+    const elementId = tabPanelId || griId;
+    const extensionStorage = ExtensionStorage.getInstance(); // Get the instance of ExtensionStorage
 
-/**
- * A convenience function to attach event handlers that automatically
- * save any grid changes. Also attempts to restore any previously-saved settings.
- */
-export function setupGridPersistence(
-  grid: SlickgridReactInstance,
-  gridKey: string
-) {
-  // 1) Restore previously saved settings, if any
-  const savedState = loadGridSettings(gridKey);
-  if (savedState && savedState.columns) {
-    // For example, you can reapply column sizes/order
-    // Or use `grid.gridService.applyGridState(savedState)` if you rely on GridStateService
-    grid.slickGrid.setColumns(savedState.columns);
-    // If you also store/filter sorting, filtering, pinned columns, etc., reapply them as well
-  }
+    useResizeSlickGridOnShown(elementId);
 
-  // 2) Subscribe to onGridStateChanged to auto-save on every change
-  //    (This is a slickgrid-react feature. If not using `onGridStateChanged`,
-  //     you can directly subscribe to SlickGrid's native events or use the GridStateService.)
-  if (grid?.eventHandler) {
-    grid.eventHandler.subscribe(grid.onGridStateChanged, async (_e: Event, args: GridStateChange) => {
-      // The `args.gridState` will include columns, filters, sorters, etc. if used
-      await saveGridSettings(gridKey, args.gridState);
-    });
-  }
-}
+    useEffect(() => {
+        if (gridRef.current && rows) {
+            gridRef.current.dataset = rows;
+        }
+    }, [rows]);
 
+    const saveGridState = useCallback((gridState: GridState) => {
+        extensionStorage.update(`gridState_${griId}`, gridState);
+    }, [extensionStorage, griId]);
 
+    const loadGridState = useCallback(() => {
+        return extensionStorage.get<GridState>(`gridState_${griId}`, {});
+    }, [extensionStorage, griId]);
 
+    const onGridCreated = useCallback((event: CustomEvent<{ slickGrid: SlickGrid }>) => {
+        const grid = event.detail.slickGrid;
+        const savedState = loadGridState();
+        if (savedState.columns) {
+            grid.setColumns(savedState.columns);
+        }
+        if (savedState.rowSelection) {
+            grid.setSelectedRows(savedState.rowSelection.dataContextIds);
+        }
+    }, [loadGridState]);
 
+    const onGridStateChanged = useCallback((event: CustomEvent<{ gridState: GridState }>) => {
+        saveGridState(event.detail.gridState);
+    }, [saveGridState]);
 
-useEffect(() => {
-    // When the grid is fully created/mounted, attach the persistence logic
-    if (gridRef.current && gridRef.current.initialized) {
-      const slickgridReactInstance = gridRef.current.slickgridInstance;
-      if (slickgridReactInstance) {
-        setupGridPersistence(slickgridReactInstance, GRID_STORAGE_KEY);
-      }
-    }
+    if (!rows || loading) return <LoadingElement label={loadingLabel} />;
+
+    const gridTemplateColumns: Column[] = columnOrder.map((col) => ({
+        id: col.key as string,
+        name: col.header === "IML" ? IMHeader() : col.header,
+        field: col.key as string,
+        minWidth: col.key === "path" ? 250 : 100,
+        params: { rows },
+        formatter: (row, cell, value, columnDef, dataContext) => {
+            let cellContent;
+            if (col.key === 'modified') {
+                cellContent = checkboxFormatter(row, cell, col.header.toLowerCase() === 'modified' ? !!value : !value, columnDef, dataContext);
+            } else if (col.key === "iml") {
+                cellContent = checkboxFormatter(row, cell, imlFiles?.includes(dataContext.path), columnDef, dataContext);
+            } else if (col.key === "path") {
+                cellContent = PathNavigationElement({ path: value as string, tag: dataContext.diffTag, row: dataContext, onClick: onClickPath });
+            } else if (col.key === "rev") {
+                cellContent = document.createTextNode(convertRevToStringValue(value as string, dataContext.modified));
+            } else {
+                cellContent = document.createTextNode(value as string);
+            }
+
+            const cellElement = document.createElement("div");
+            cellElement.className = col.key === "path" && imlFiles?.includes(dataContext.path) ? "iml-cell" : "";
+            cellElement.appendChild(typeof cellContent === "string" ? document.createTextNode(cellContent) : cellContent);
+            return cellElement;
+        },
+        cssClass: col.key === "path" && imlFiles?.includes(col.key as string) ? "iml-cell" : ""
+    }));
+
+    const gridOptions: GridOption = {
+        enableCellNavigation: true,
+        enableColumnReorder: false,
+        syncColumnCellResize: true,
+        enableAutoTooltip: true,
+        enableHeaderMenu: false,
+        enableRowSelection: true,
+        showCellSelection: false,
+        enableContextMenu: false,
+        enableColumnPicker: false,
+        enableGridMenu: false,
+    };
+
+    return (
+        <SlickGridContainer>
+            <SlickgridReact
+                gridId={griId}
+                ref={gridRef}
+                columnDefinitions={gridTemplateColumns}
+                gridOptions={gridOptions}
+                dataset={rows}
+                onReactGridCreated={onGridCreated}
+                onGridStateChanged={onGridStateChanged}
+            />
+        </SlickGridContainer>
+    );
+};
+
+export default PathsGrid;

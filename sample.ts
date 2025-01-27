@@ -278,3 +278,37 @@ function mapCurrentColumnsToColumns(
         };
     });
 }
+
+
+======================
+
+const onGridCreated = useCallback((event: CustomEvent<{ slickGrid: SlickGrid }>) => {
+  const grid = event.detail.slickGrid;
+
+  // if we have saved columns
+  if (gridState.columns) {
+    const originalCols = grid.getColumns() as Column[]; 
+    // or if you have them in React state, e.g. `gridTemplateColumns`
+
+    const mergedCols = mergeColumnState(originalCols, gridState.columns);
+    grid.setColumns(mergedCols);
+  }
+  // if we have row selections
+  if (gridState.rowSelection) {
+    grid.setSelectedRows(gridState.rowSelection.dataContextIds);
+  }
+}, [gridState]);
+
+function mergeColumnState(originalCols: Column[], currentCols: CurrentColumn[]) {
+  // Step through currentCols in the new order, match them by `id` or `field`,
+  // then copy their width, etc.
+  return currentCols.map((curCol) => {
+    const orig = originalCols.find(o => o.id === curCol.id) || {};
+    return {
+      ...orig,
+      // Keep original definition but override with current column's width, etc.
+      width: curCol.width,
+      // Possibly reorder name, headerCssClass, etc. if needed
+    } as Column;
+  });
+}

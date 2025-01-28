@@ -370,13 +370,26 @@ export default PathsGrid;
 
 ========================
 
-const handleColumnsResized = useCallback(() => {
-        if (gridRef.current) {
-            const columns = gridRef.current.slickGrid.getColumns();
-            const columnWidths = columns.reduce((acc, col) => {
-                acc[col.id] = col.width ?? col.minWidth ?? 100; // Provide a default value if width is undefined
-                return acc;
-            }, {} as { [key: string]: number });
-            updateState({ columnWidths });
-        }
-    }, [updateState]);
+const onGridCreated = useCallback((ev: CustomEvent<SlickgridReactInstance>) => {
+    const gridInstance = ev.detail;
+    gridRef.current = gridInstance;
+
+    const slickGrid = gridInstance.slickGrid;
+    slickGrid.onColumnsResized.subscribe(() => {
+      // Grab updated widths
+      const updatedWidths: { [key: string]: number } = {};
+      slickGrid.getColumns().forEach((c) => {
+        updatedWidths[c.id] = c.width ?? c.minWidth ?? 100;
+      });
+      setColumnWidths(updatedWidths);
+    });
+  }, []);
+
+  if (loading) {
+    return <LoadingElement label={loadingLabel} />;
+  }
+
+  if (!rows) {
+    return <div>No rows to display</div>;
+  }
+

@@ -16,7 +16,112 @@ type CVSTag = typeof CVSTags[number];
 interface PathPatchInfo {
     url: string;
     rev: string;
-    modified: boolean;
+    modified: boolean;import React, { useEffect, useRef, useCallback, useMemo } from "react";
+import { SlickgridReact, Column, GridOption, GridState, SlickgridReactInstance } from "slickgrid-react";
+import { v4 as uuidv4 } from "uuid";
+import { LoadingElement } from "./SharedComponents";
+import { SlickGridContainer } from "./SlickGridContainer";
+import { usePersistentState, useWebviewState } from "../components/VsCodeExtensionContext";
+
+const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
+    const { columnOrder, label, rows, loading, loadingLabel, tabPanelId, onClickPath, imlFiles } = props;
+    const gridRef = useRef<SlickgridReactInstance | null>(null);
+    const gridId = `path_grid_${label}`;
+    const elementId = tabPanelId || gridId;
+
+    const initialState: GridState = {};
+    const [state, updateState] = usePersistentState<GridState>("pathsGridState", initialState);
+    const [presets, updatePresets] = useWebviewState<GridState>("pathsGridPresets", initialState);
+
+    // Update dataset when rows change
+    useEffect(() => {
+        if (gridRef.current?.slickGrid && rows) {
+            gridRef.current.slickGrid.setData(rows);
+            gridRef.current.slickGrid.invalidate();
+        }
+    }, [rows]);
+
+    // Handle column resizing
+    const handleColumnsResized = useCallback(() => {
+        const slickGrid = gridRef.current?.slickGrid;
+        if (slickGrid) {
+            const columns = slickGrid.getColumns();
+            const columnWidths = columns.reduce((acc, col) => {
+                acc[col.id] = col.width ?? col.minWidth ?? 100;
+                return acc;
+            }, {} as { [key: string]: number });
+            updateState({ columns });
+        } else {
+            console.error("Grid instance is not initialized.");
+        }
+    }, [updateState]);
+
+    // Restore grid state on grid creation
+    const onGridCreated = useCallback((event: CustomEvent<SlickgridReactInstance>) => {
+        const gridInstance = event.detail;
+        gridRef.current = gridInstance;
+
+        const slickGrid = gridInstance.slickGrid;
+        if (slickGrid) {
+            const columns = columnOrder.map((col) => ({
+                ...col,
+                width: state.columns?.find((c) => c.id === col.key)?.width || col.width,
+            }));
+            slickGrid.setColumns(columns);
+
+            if (state.sorters) {
+                const { columnId, direction } = state.sorters[0];
+                slickGrid.setSortColumn(columnId, direction === "ASC");
+            }
+
+            slickGrid.onColumnsResized.subscribe(() => handleColumnsResized());
+        }
+    }, [columnOrder, state.columns, state.sorters, handleColumnsResized]);
+
+    const onGridStateChanged = useCallback((e: CustomEvent<{ gridState: GridState }>) => {
+        updatePresets(e.detail.gridState);
+    }, [updatePresets]);
+
+    if (!rows || loading) return <LoadingElement label={loadingLabel} />;
+
+    const gridColumns: Column[] = columnOrder.map((col) => ({
+        id: col.key,
+        name: col.header,
+        field: col.key,
+        minWidth: 100,
+        width: state.columns?.find((c) => c.id === col.key)?.width || 150,
+        formatter: (row, cell, value, columnDef, dataContext) => {
+            if (col.key === "path") {
+                return `<a href="#" onclick="return false;">${value}</a>`;
+            }
+            return value;
+        },
+    }));
+
+    const gridOptions: GridOption = {
+        enableCellNavigation: true,
+        enableColumnReorder: true,
+        enableAutoResize: true,
+        enableHeaderMenu: true,
+    };
+
+    return (
+        <SlickGridContainer id={elementId}>
+            <SlickgridReact
+                gridId={gridId}
+                ref={gridRef}
+                columnDefinitions={gridColumns}
+                gridOptions={gridOptions}
+                dataset={rows}
+                onReactGridCreated={onGridCreated}
+                onGridStateChanged={onGridStateChanged}
+            />
+        </SlickGridContainer>
+    );
+};
+
+export default PathsGrid;
+
     deleted: boolean;
     tags?: { [key in CvsDiffType]?: string };
 }

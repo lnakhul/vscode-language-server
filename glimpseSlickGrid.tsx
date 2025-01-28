@@ -1,132 +1,102 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import { SlickgridReact, Column, GridOption, GridState, CurrentColumn } from "slickgrid-react";
+import ".../css//slickGrid.css";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { SlickgridReact, Column, GridOption, SlickgridReactInstance } from "slickgrid-react";
 import { v4 as uuidv4 } from "uuid";
 import { LoadingElement } from "./SharedComponents";
 import ReactDOM from "react-dom";
 import { SlickGridContainer } from "./SlickGridContainer";
 
-// ... (other imports and interfaces)
+// 1) Import your VsCodeExtensionContext that provides vsCodeApi
+import VsCodeExtensionContext from "../components/VsCodeExtensionContext";
+
+// 2) Possibly import any interfaces if you have them
+import { LoadGridSettingsMessage, SaveGridSettingsMessage } from "../interfaces/interfaces";
 
 export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
-    const { columnOrder, label, imlFiles, rows, diffCvsTag, onClickPath, loading, loadingLabel, tabPanelId } = props;
-    const gridRef = useRef<SlickgridReact | null>(null);
-    const griId = `path_grid_${label}`;
-    const elementId = tabPanelId || griId;
+  const { columnOrder, label, imlFiles, rows, onClickPath, loading, loadingLabel, tabPanelId } = props;
+  
+  // Keep track of column widths in state
+  const [columnWidths, setColumnWidths] = useState<{ [colId: string]: number }>({});
 
-    // State to manage grid state (column sizes, etc.)
-    const [gridState, setGridState] = useState<GridState>({});
+  // Access vsCodeApi to invoke extension commands
+  const vsCodeApi = useContext(VsCodeExtensionContext);
 
-    useResizeSlickGridOnShown(elementId);
+  const gridRef = useRef<SlickgridReact | null>(null);
+  const griId = `path_grid_${label}`;
+  const elementId = tabPanelId || griId;
 
-    useEffect(() => {
-        if (gridRef.current && rows) {
-            gridRef.current.dataset = rows;
+  // On mount, load from extension storage
+  useEffect(() => {
+    let mounted = true;
+    vsCodeApi.invoke("loadGridSettings", { gridId: label } as LoadGridSettingsMessage)
+      .then((resp: any) => {
+        // e.g. resp might look like { type: 'loadGridSettings', gridId: 'MyGrid', settings: { columnWidths: {...} } }
+        if (mounted && resp?.settings?.columnWidths) {
+          setColumnWidths(resp.settings.columnWidths);
         }
-    }, [rows]);
+      })
+      .catch(console.error);
+    return () => { mounted = false; };
+  }, [vsCodeApi, label]);
 
-    // Define gridTemplateColumns before it is used in onGridCreated
-    const gridTemplateColumns: Column[] = columnOrder.map((col) => ({
-        id: col.key as string,
-        name: col.header === "IML" ? IMHeader() : col.header,
-        field: col.key as string,
-        minWidth: col.key === "path" ? 250 : 100,
-        params: { rows },
-        formatter: (row, cell, value, columnDef, dataContext) => {
-            let cellContent;
-            if (col.key === 'modified') {
-                cellContent = checkboxFormatter(row, cell, col.header.toLowerCase() === 'modified' ? !!value : !value, columnDef, dataContext);
-            } else if (col.key === "iml") {
-                cellContent = checkboxFormatter(row, cell, imlFiles?.includes(dataContext.path), columnDef, dataContext);
-            } else if (col.key === "path") {
-                cellContent = PathNavigationElement({ path: value as string, tag: dataContext.diffTag, row: dataContext, onClick: onClickPath });
-            } else if (col.key === "rev") {
-                cellContent = document.createTextNode(convertRevToStringValue(value as string, dataContext.modified));
-            } else {
-                cellContent = document.createTextNode(value as string);
-            }
+  // If the data changes, update the slickGrid dataset
+  useEffect(() => {
+    if (gridRef.current && rows) {
+      gridRef.current.dataset = rows;
+    }
+  }, [rows]);
 
-            const cellElement = document.createElement("div");
-            cellElement.className = col.key === "path" && imlFiles?.includes(dataContext.path) ? "iml-cell" : "";
-            cellElement.appendChild(typeof cellContent === "string" ? document.createTextNode(cellContent) : cellContent);
-            return cellElement;
-        },
-        cssClass: col.key === "path" && imlFiles?.includes(col.key as string) ? "iml-cell" : ""
-    }));
+  // When the grid is created, subscribe to onColumnsResized => update local state + extension storage
+  const onGridCreated = useCallback((ev: CustomEvent<SlickgridReactInstance>) => {
+    const gridInstance = ev.detail;
+    gridRef.current = gridInstance as unknown as SlickgridReact;
 
-    // Function to map CurrentColumn[] to Column[]
-    const mapCurrentColumnsToColumns = useCallback(
-        (currentColumns: CurrentColumn[], originalColumns: Column[]): Column[] => {
-            return currentColumns.map((currentCol) => {
-                const originalCol = originalColumns.find((col) => col.id === currentCol.id);
-                if (!originalCol) {
-                    throw new Error(`Column with id ${currentCol.id} not found in original columns`);
-                }
-                return {
-                    ...originalCol, // Retain all properties from the original column
-                    width: currentCol.width, // Apply the current width from gridState
-                };
-            });
-        },
-        []
-    );
+    const slickGrid = gridInstance.slickGrid;
+    slickGrid.onColumnsResized.subscribe(() => {
+      const updatedWidths: Record<string, number> = {};
+      slickGrid.getColumns().forEach((c) => {
+        updatedWidths[c.id] = c.width ?? c.minWidth ?? 100;
+      });
+      setColumnWidths(updatedWidths);
 
-    // Restore grid state when the grid is created
-    const onGridCreated = useCallback(
-        (event: CustomEvent<{ slickGrid: SlickGrid }>) => {
-            const grid = event.detail.slickGrid;
+      // Save to extension storage
+      vsCodeApi.invoke("saveGridSettings", {
+        gridId: label,
+        settings: { columnWidths: updatedWidths }
+      } as SaveGridSettingsMessage);
+    });
+  }, [vsCodeApi, label]);
 
-            if (gridState.columns) {
-                // Map CurrentColumn[] to Column[]
-                const columns = mapCurrentColumnsToColumns(gridState.columns, gridTemplateColumns);
-                grid.setColumns(columns);
-            }
+  if (!rows || loading) {
+    return <LoadingElement label={loadingLabel} />;
+  }
 
-            if (gridState.rowSelection?.dataContextIds) {
-                // Convert dataContextIds to number[]
-                const rowIds = gridState.rowSelection.dataContextIds.map((id) => Number(id));
-                grid.setSelectedRows(rowIds);
-            } else {
-                // If dataContextIds is undefined, pass an empty array
-                grid.setSelectedRows([]);
-            }
-        },
-        [gridState, gridTemplateColumns, mapCurrentColumnsToColumns]
-    );
+  // Create column definitions, applying any loaded widths
+  const gridTemplateColumns: Column[] = columnOrder.map((col) => ({
+    id: col.key as string,
+    name: col.header,
+    field: col.key as string,
+    width: columnWidths[col.key as string] ?? 100,
+    // etc. your custom formatters...
+  }));
 
-    // Update grid state when it changes (e.g., column resizing)
-    const onGridStateChanged = useCallback((event: CustomEvent<{ gridState: GridState }>) => {
-        console.log("Grid state changed:", event.detail.gridState);
-        setGridState(event.detail.gridState); // Update React state with the new grid state
-    }, []);
+  const gridOptions: GridOption = {
+    enableCellNavigation: true,
+    enableColumnReorder: false,
+    syncColumnCellResize: true,
+    // ...
+  };
 
-    if (!rows || loading) return <LoadingElement label={loadingLabel} />;
-
-    const gridOptions: GridOption = {
-        enableCellNavigation: true,
-        enableColumnReorder: false,
-        syncColumnCellResize: true,
-        enableAutoTooltip: true,
-        enableHeaderMenu: false,
-        enableRowSelection: true,
-        showCellSelection: false,
-        enableContextMenu: false,
-        enableColumnPicker: false,
-        enableGridMenu: false,
-    };
-
-    return (
-        <SlickGridContainer>
-            <SlickgridReact
-                gridId={griId}
-                ref={gridRef}
-                columnDefinitions={gridTemplateColumns}
-                gridOptions={gridOptions}
-                dataset={rows}
-                onReactGridCreated={onGridCreated}
-                onGridStateChanged={onGridStateChanged}
-            />
-        </SlickGridContainer>
-    );
+  return (
+    <SlickGridContainer>
+      <SlickgridReact
+        gridId={griId}
+        ref={gridRef}
+        columnDefinitions={gridTemplateColumns}
+        gridOptions={gridOptions}
+        dataset={rows}
+        onReactGridCreated={onGridCreated}
+      />
+    </SlickGridContainer>
+  );
 };
-
-export default PathsGrid;

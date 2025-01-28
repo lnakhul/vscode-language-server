@@ -136,3 +136,16 @@ useEffect(() => {
         loadSettings();
         return () => { mounted = false; };
     }, [vsCodeApi, label]);
+
+
+=================================
+
+const onGridMenuCommand = useCallback((event: CustomEvent<{ command: string }>) => {
+  const { command } = event.detail;
+  if (command === 'resetGridState') {
+    // Clear extension storage
+    vsCodeApi.invoke("saveGridSettings", { gridId: label, settings: undefined });
+    // Reset columns, sorts, etc. back to initial
+    gridRef.current?.gridStateService.resetGridToInitialState();
+  }
+}, [vsCodeApi, label]);

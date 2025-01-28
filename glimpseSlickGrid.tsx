@@ -118,3 +118,21 @@ const loadGridSettings = useCallback(async () => {
     useEffect(() => {
         loadGridSettings();
     }, [loadGridSettings]);
+
+=================================
+
+useEffect(() => {
+        let mounted = true;
+        const loadSettings = async () => {
+            try {
+                const resp = await vsCodeApi.invoke("loadGridSettings", { gridId: label } as LoadGridSettingsMessage);
+                if (mounted && resp?.settings?.columnWidths) {
+                    setColumnWidths(resp.settings.columnWidths);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        };
+        loadSettings();
+        return () => { mounted = false; };
+    }, [vsCodeApi, label]);

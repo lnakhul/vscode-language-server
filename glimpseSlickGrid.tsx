@@ -100,3 +100,21 @@ export const PathsGrid: React.FC<PathsGridProps> = (props: PathsGridProps) => {
     </SlickGridContainer>
   );
 };
+
+
+==========================
+
+const loadGridSettings = useCallback(async () => {
+        try {
+            const resp = await vsCodeApi.invoke("loadGridSettings", { gridId: label } as LoadGridSettingsMessage);
+            if (resp?.settings?.columnWidths) {
+                setColumnWidths(resp.settings.columnWidths);
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }, [vsCodeApi, label]);
+
+    useEffect(() => {
+        loadGridSettings();
+    }, [loadGridSettings]);

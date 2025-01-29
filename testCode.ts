@@ -61,3 +61,58 @@ class FileService(BaseRpcService):
         except Exception as e:
             logger.error(f"Validation failed: {str(e)}")
             return False
+
+
+
+======================
+
+import logging
+import sandra
+from vscode.rpc_service.base import BaseRpcService
+import pathlib
+
+logger = logging.getLogger(__name__)
+
+class FileManagerService(BaseRpcService):
+    """File Manager proxy service for handling file operations in Sandra."""
+    
+    PREFIX = 'fileManager'
+    stateless = True
+    
+    def __init__(self, globals, control_thread):
+        super().__init__(globals, control_thread)
+        self.db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
+
+    def handle_rename(self, oldPath: str, newPath: str) -> bool:
+        """Renames a file or folder in Sandra."""
+        try:
+            obj = self.db.readobj(oldPath)
+            if obj:
+                obj.rename(newPath)
+                return True
+        except Exception as e:
+            logger.error(f"Failed to rename: {str(e)}")
+            return False
+
+    def handle_delete(self, filePath: str) -> bool:
+        """Deletes a file or folder in Sandra."""
+        try:
+            obj = self.db.readobj(filePath)
+            if obj:
+                obj.delete()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete file: {str(e)}")
+            return False
+
+    def handle_move(self, oldPath: str, newPath: str) -> bool:
+        """Moves a file or folder in Sandra."""
+        try:
+            obj = self.db.readobj(oldPath)
+            if obj:
+                obj.rename(newPath)
+                return True
+        except Exception as e:
+            logger.error(f"Failed to move file: {str(e)}")
+            return False
+

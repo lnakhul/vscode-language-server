@@ -350,3 +350,52 @@ export class FileManager implements vscode.Disposable {
         this.fileWatcher.dispose();
     }
 }
+
+
+# file_service.py
+import logging
+import sandra
+from datetime import datetime
+from typing import List, Dict
+from vscode.rpc_service.base import BaseRpcService
+
+logger = logging.getLogger(__name__)
+
+class FileService(BaseRpcService):
+    PREFIX = 'file'
+    
+    def __init__(self, globals, control_thread):
+        super().__init__(globals, control_thread)
+        self.db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
+        
+    def handle_listDirectory(self, params: Dict) -> List[Dict]:
+        try:
+            path = params.get('path', f"/homedirs/home/{sandra.USERNAME}")
+            items = []
+            
+            for name in sandra.nameRange(dirname=path, db=self.db):
+                full_path = sandra.join(path, name)
+                meta = self.db.readmeta(full_path)
+                
+                items.append({
+                    'path': full_path,
+                    'isDirectory': meta.is_directory,
+                    'name': name,
+                    'modified': datetime.fromtimestamp(meta.modified_time).isoformat() if meta.modified_time else None,
+                    'size': meta.size if not meta.is_directory else 0
+                })
+            
+            return items
+            
+        except Exception as e:
+            logger.error(f"Directory listing failed: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to list directory: {str(e)}")
+
+    def handle_readFile(self, params: Dict) -> str:
+        path = params['path']
+        try:
+            obj = self.db.readobj(path)
+            return obj.data if hasattr(obj, 'data') else ''
+        except Exception as e:
+            logger.error(f"File read failed: {str(e)}")
+            raise RuntimeError(f"Failed to read file: {path}")

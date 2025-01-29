@@ -258,3 +258,95 @@ private async listHomedirs(): Promise<void> {
         }
     }
 }
+
+
+
+==================================
+
+import vscode from 'vscode';
+import * as path from 'path';
+import { ProxyManager } from './proxyManager';
+import { simpleCreateQuickPick } from './commonPickers';
+
+export class FileManager implements vscode.Disposable {
+    private proxyManager: ProxyManager;
+    private fileWatcher: vscode.FileSystemWatcher;
+
+    constructor(proxyManager: ProxyManager) {
+        this.proxyManager = proxyManager;
+        this.registerCommands();
+        this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+    }
+
+    private registerCommands(): void {
+        vscode.commands.registerCommand('extension.deleteFile', this.deleteFile, this);
+        vscode.commands.registerCommand('extension.renameFile', this.renameFile, this);
+        vscode.commands.registerCommand('extension.moveFile', this.moveFile, this);
+        vscode.commands.registerCommand('extension.showFileTree', this.showFileTree, this);
+    }
+
+    private async showFileTree(): Promise<void> {
+        const files = await this.proxyManager.sendRequest<string[]>(null, 'file:listFiles', {});
+        vscode.window.showQuickPick(files, { placeHolder: 'Select a file to manage' }).then(selected => {
+            if (selected) {
+                this.manageFileActions(selected);
+            }
+        });
+    }
+
+    private async manageFileActions(filePath: string): Promise<void> {
+        const choices = ['Delete', 'Rename', 'Move'];
+        const action = await vscode.window.showQuickPick(choices, { placeHolder: 'Select an action' });
+        if (!action) return;
+
+        switch (action) {
+            case 'Delete':
+                this.deleteFile(filePath);
+                break;
+            case 'Rename':
+                this.renameFile(filePath);
+                break;
+            case 'Move':
+                this.moveFile(filePath);
+                break;
+        }
+    }
+
+    private async deleteFile(filePath: string): Promise<void> {
+        if (!this.validateStagingArea(filePath)) {
+            vscode.window.showWarningMessage('Staging area validation failed. Cannot delete.');
+            return;
+        }
+        await this.proxyManager.sendRequest(null, 'file:delete', { filePath });
+        vscode.window.showInformationMessage(`Deleted: ${filePath}`);
+    }
+
+    private async renameFile(filePath: string): Promise<void> {
+        const newName = await vscode.window.showInputBox({ prompt: 'Enter new file name' });
+        if (!newName) return;
+        const newFilePath = path.join(path.dirname(filePath), newName);
+        await this.proxyManager.sendRequest(null, 'file:rename', { filePath, newFilePath });
+        vscode.window.showInformationMessage(`Renamed to: ${newFilePath}`);
+    }
+
+    private async moveFile(filePath: string): Promise<void> {
+        const newLocation = await vscode.window.showInputBox({ prompt: 'Enter new location' });
+        if (!newLocation) return;
+        const newFilePath = path.join(newLocation, path.basename(filePath));
+        await this.proxyManager.sendRequest(null, 'file:move', { filePath, newFilePath });
+        vscode.window.showInformationMessage(`Moved to: ${newFilePath}`);
+    }
+
+    private validateStagingArea(filePath: string): boolean {
+        const user = this.getCurrentUser();
+        return filePath.includes(`homedirs/${user}/staging_area`);
+    }
+
+    private getCurrentUser(): string {
+        return process.env.USER || process.env.USERNAME || 'unknown';
+    }
+
+    dispose(): void {
+        this.fileWatcher.dispose();
+    }
+}

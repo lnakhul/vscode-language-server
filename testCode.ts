@@ -137,6 +137,25 @@ class FileManagerService(BaseRpcService):
 
 
 ===========================
+import * as vscode from 'vscode';
+import { ProxyManager } from './proxyManager';
+import * as path from 'path';
+import { simpleCreateQuickPick, PickerArgs } from './utils';
+
+export class FileManager {
+    private proxyManager: ProxyManager;
+
+    constructor(proxyManager: ProxyManager) {
+        this.proxyManager = proxyManager;
+        this.registerCommands();
+    }
+
+    private registerCommands(): void {
+        vscode.commands.registerCommand('quartz.fileManager.rename', this.renameFile.bind(this));
+        vscode.commands.registerCommand('quartz.fileManager.delete', this.deleteFile.bind(this));
+        vscode.commands.registerCommand('quartz.fileManager.move', this.moveFile.bind(this));
+        vscode.commands.registerCommand('quartz.fileManager.listHomedirs', this.listHomedirs.bind(this));
+    }
 
 private async listHomedirs(): Promise<void> {
         const folders = await this.proxyManager.sendRequest('fileManager:listHomedirs', {});

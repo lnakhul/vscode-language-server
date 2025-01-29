@@ -399,3 +399,13 @@ class FileService(BaseRpcService):
         except Exception as e:
             logger.error(f"File read failed: {str(e)}")
             raise RuntimeError(f"Failed to read file: {path}")
+
+
+================
+
+const items = files.map(file => ({
+                label: `${file.isDirectory ? '📁' : '📄'} ${file.name}`,
+                description: file.isDirectory ? 'Folder' : this.formatSize(file.size || 0),
+                detail: `Path: ${file.path}\nModified: ${file.modified || 'Unknown'}`,
+                path: file.path
+            }));

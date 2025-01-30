@@ -43,3 +43,31 @@ private async listHomedirsFolder(): Promise<void> {
             }
         }
     }
+
+
+
+=========================================
+
+def handle_listHomedirs(self) -> dict:
+    """Lists all folders and their subdirectories in a hierarchical structure."""
+    try:
+        root_path = "/"  # Root level for the Sandra object database
+        folder_tree = {}
+
+        # Sandra's walk to get a hierarchical structure of directories
+        for folder in sandra.walk(root=root_path, db=self.db, returnDirs=True, recurse=True):
+            parts = folder.strip("/").split("/")
+            current_level = folder_tree
+
+            # Traverse the hierarchy to insert subdirectories
+            for part in parts:
+                if part not in current_level:
+                    current_level[part] = {}
+                current_level = current_level[part]
+
+        logger.info(f"Retrieved folder structure: {folder_tree}")
+        return folder_tree
+
+    except Exception as e:
+        logger.error(f"Failed to list homedirs: {str(e)}")
+        return {}

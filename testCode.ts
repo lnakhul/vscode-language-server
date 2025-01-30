@@ -102,3 +102,35 @@ def handle_listHomedirs(self) -> list:
     except Exception as e:
         logger.error(f"Failed to list homedirs: {str(e)}")
         return []
+
+
+
+==================================
+
+def handle_listHomedirs(self) -> list:
+    """Lists all folders and subfolders in the homedirs directory as a tree structure."""
+    try:
+        def get_subfolders(base_path):
+            subfolders = []
+            for name in sandra.nameRange(dirname=base_path, db=self.db):
+                full_path = f"{base_path}/{name}"
+                # Recursively get subfolders
+                subfolders.append({
+                    "name": name,
+                    "subfolders": get_subfolders(full_path)
+                })
+            return subfolders
+
+        root_path = "/"
+        folders = []
+        for name in sandra.nameRange(dirname=root_path, db=self.db):
+            full_path = f"{root_path}/{name}"
+            folders.append({
+                "name": name,
+                "subfolders": get_subfolders(full_path)
+            })
+        return folders
+    except Exception as e:
+        logger.error(f"Failed to list homedirs: {str(e)}")
+        return []
+

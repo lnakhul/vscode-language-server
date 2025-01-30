@@ -71,3 +71,34 @@ def handle_listHomedirs(self) -> dict:
     except Exception as e:
         logger.error(f"Failed to list homedirs: {str(e)}")
         return {}
+
+
+
+def handle_listHomedirs(self) -> list:
+    """Lists all folders and their subdirectories in a hierarchical structure."""
+    try:
+        root_path = "/"
+        folder_tree = {}
+
+        # Sandra's walk to get a hierarchical structure of directories
+        for folder in sandra.walk(root=root_path, db=self.db, returnDirs=True, recurse=True):
+            parts = folder.strip("/").split("/")
+            current_level = folder_tree
+
+            # Traverse the hierarchy to insert subdirectories
+            for part in parts:
+                if part not in current_level:
+                    current_level[part] = {}
+                current_level = current_level[part]
+
+        # Convert dictionary format to list format expected by frontend
+        def convert_tree_to_list(tree):
+            return [{"name": key, "subfolders": convert_tree_to_list(value)} for key, value in tree.items()]
+
+        folder_list = convert_tree_to_list(folder_tree)
+        logger.info(f"Retrieved folder structure: {folder_list}")
+        return folder_list
+
+    except Exception as e:
+        logger.error(f"Failed to list homedirs: {str(e)}")
+        return []

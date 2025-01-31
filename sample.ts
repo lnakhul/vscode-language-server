@@ -45,3 +45,33 @@ private async deleteFile(filePath: string): Promise<void> {
             vscode.window.showInformationMessage(`Deleted: ${filePath}`);
         }
     }
+
+
+==========================def handle_listHomedirs(self) -> list:
+    """Lists only directories (folders and subfolders) in the homedirs directory."""
+    try:
+        def get_subfolders(base_path):
+            subfolders = []
+            for name in sandra.nameRange(dirname=base_path, db=self.db, types=["Directory"]):  # Ensure only directories
+                full_path = f"{base_path}/{name}"
+                subfolders.append({
+                    "name": name,
+                    "subfolders": get_subfolders(full_path)  # Recursively get subfolders
+                })
+            return subfolders
+
+        root_path = "/"
+        folders = []
+        for name in sandra.nameRange(dirname=root_path, db=self.db, types=["Directory"]):  # Filter for directories only
+            full_path = f"{root_path}/{name}"
+            folders.append({
+                "name": name,
+                "subfolders": get_subfolders(full_path)
+            })
+
+        logger.info(f"Filtered folders for frontend: {folders}")
+        return folders
+    except Exception as e:
+        logger.error(f"Failed to list homedirs: {str(e)}")
+        return []
+

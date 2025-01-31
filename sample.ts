@@ -156,3 +156,19 @@ def handle_listHomedirs(self) -> list:
     except Exception as e:
         logger.error(f"Failed to list homedirs: {str(e)}")
         return []
+
+
+
+================================
+
+
+def handle_listHomedirs(self) -> list:
+        """Lists all folders in the homedirs directory."""
+        try:
+            folders = []
+            for name in sandra.nameRange(dirname='/', db=self.db):
+                folders.append(name)
+            return folders
+        except Exception as e:
+            logger.error(f"Failed to list homedirs: {str(e)}")
+            return []

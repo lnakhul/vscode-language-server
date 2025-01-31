@@ -1,11 +1,13 @@
-def _list_folders(self, path: str) -> list:
-        """Recursively lists all folders in the given path."""
-        folders = []
-        for name in sandra.nameRange(expand=False, dirname=path, db=self.db, types=['Directory']):
-            sub_path = f"{path}/{name}"
-            subfolders = self._list_folders(sub_path)
-            folders.append({'name': name, 'subfolders': subfolders})
-        return folders
+def handle_listHomedirs(self) -> list:
+        """Lists all folders in the homedirs directory."""
+        try:
+            folders = []
+            for name in sandra.nameRange(dirname='/', db=self.db):
+                folders.append(name)
+            return folders
+        except Exception as e:
+            logger.error(f"Failed to list homedirs: {str(e)}")
+            return []
 
 ==========================================
 

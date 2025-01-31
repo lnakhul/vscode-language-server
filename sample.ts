@@ -88,3 +88,32 @@ private async deleteFile(filePath: string): Promise<void> {
         logger.error(f"Failed to list homedirs: {str(e)}")
         return []
 
+
++==============================
+
+def handle_delete(self, filePath: str, force: bool = False) -> bool:
+        """Recursively deletes all objects inside a directory and then deletes the directory itself in Sandra."""
+        try:
+            def delete_contents(path):
+                contents = sandra.nameRange(dirname=path, db=self.db)
+                for item in contents:
+                    full_path = f"{path}/{item}"
+                    obj = self.db.readobj(full_path)
+                    if obj:
+                        if obj.type == "Directory":
+                            delete_contents(full_path)
+                        obj.delete()
+
+            delete_contents(filePath)
+
+            # Check if the directory is empty and delete it
+            remaining_objects = sandra.nameRange(dirname=filePath, db=self.db)
+            if not remaining_objects or force:
+                dir_obj = self.db.readobj(filePath)
+                if dir_obj:
+                    dir_obj.delete()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to delete directory: {str(e)}")
+            return False

@@ -134,3 +134,93 @@ def handle_listHomedirs(self) -> list:
         logger.error(f"Failed to list homedirs: {str(e)}")
         return []
 
+
+=======================
+
+
+import * as vscode from 'vscode';
+import { FileManager } from './fileManager';
+import { ProxyManager, ProxyProcessState } from './proxyManager';
+import { mock } from 'jest-mock-extended';
+import { expect, test, describe, beforeEach, afterEach, jest } from '@jest/globals';
+
+jest.mock("../../logging");
+
+let proxyManager: ProxyManager;
+
+describe('FileManager Tests', () => {
+    let fileManager: FileManager;
+
+    beforeEach(() => {
+        proxyManager = mock<ProxyManager>();
+        fileManager = new FileManager(proxyManager);
+    });
+
+    afterEach(() => {
+        fileManager.dispose();
+    });
+
+    test('Test listHomedirsFolder', async () => {
+        const folders = [
+            { name: 'folder1', subfolders: [] },
+            { name: 'folder2', subfolders: [] }
+        ];
+        proxyManager.sendRequest.mockResolvedValue(folders);
+
+        await fileManager.listHomedirsFolder();
+
+        expect(proxyManager.sendRequest).toHaveBeenCalledWith(null, 'file:listHomedirs');
+    });
+
+    test('Test showFolderQuickPick', async () => {
+        const folders = [
+            { name: 'folder1', subfolders: [] },
+            { name: 'folder2', subfolders: [] }
+        ];
+        const selectedFolderName = 'folder1';
+        jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(selectedFolderName);
+
+        await fileManager['showFolderQuickPick'](folders, 'Select a folder to manage');
+
+        expect(vscode.window.showQuickPick).toHaveBeenCalledWith(['folder1', 'folder2'], {
+            placeHolder: 'Select a folder to manage',
+            canPickMany: false
+        });
+    });
+
+    test('Test manageFileActions', async () => {
+        const filePath = '/path/to/folder';
+        const action = 'Delete';
+        jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(action);
+
+        await fileManager['manageFileActions'](filePath);
+
+        expect(vscode.window.showQuickPick).toHaveBeenCalledWith(['Delete', 'Move'], {
+            placeHolder: 'Select an action',
+            canPickMany: false
+        });
+    });
+
+    test('Test deleteFile', async () => {
+        const filePath = '/path/to/folder';
+        proxyManager.sendRequest.mockResolvedValue(true);
+
+        await fileManager['deleteFile'](filePath);
+
+        expect(proxyManager.sendRequest).toHaveBeenCalledWith(null, 'file:delete', { filePath });
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(`Deleted: ${filePath}`);
+    });
+
+    test('Test moveFile', async () => {
+        const filePath = '/path/to/folder';
+        const newLocation = '/new/location';
+        jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue(newLocation);
+        proxyManager.sendRequest.mockResolvedValue(true);
+
+        await fileManager['moveFile'](filePath);
+
+        const newFilePath = path.join(newLocation, path.basename(filePath));
+        expect(proxyManager.sendRequest).toHaveBeenCalledWith(null, 'file:move', filePath, newFilePath);
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(`Moved to: ${newFilePath}`);
+    });
+});

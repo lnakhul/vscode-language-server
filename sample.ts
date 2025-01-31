@@ -1,3 +1,14 @@
+def _list_folders(self, path: str) -> list:
+        """Recursively lists all folders in the given path."""
+        folders = []
+        for name in sandra.nameRange(expand=False, dirname=path, db=self.db, types=['Directory']):
+            sub_path = f"{path}/{name}"
+            subfolders = self._list_folders(sub_path)
+            folders.append({'name': name, 'subfolders': subfolders})
+        return folders
+
+==========================================
+
 def handle_deleteDirectory(self, dirPath: str, force: bool = False) -> bool:
         """Deletes a directory in Sandra. If the directory is not empty, it can optionally clear the directory before deleting."""
         try:

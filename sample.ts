@@ -215,3 +215,36 @@ def handle_rename(self, oldPaths: List[str], newPaths: List[str], is_directory: 
 
 
 ==================================
+
+
+
+async renameHomedirsDirectory(filePath: string): Promise<void> {
+    const newName = await vscode.window.showInputBox({
+        prompt: 'Enter new name',
+        value: path.basename(filePath),
+    });
+
+    if (!newName) return;
+
+    const newPath = path.join(path.dirname(filePath), newName);
+
+    await vscode.window.withProgress(
+        {
+            title: `Renaming ${filePath} to ${newPath}...`,
+            location: vscode.ProgressLocation.Notification,
+        },
+        async (progress, token) => {
+            const response = await this.proxyManager.sendRequest<boolean>(
+                token,
+                'file:rename',
+                { oldPaths: [filePath], newPaths: [newPath], is_directory: true }
+            );
+
+            if (response) {
+                vscode.window.showInformationMessage(`Renamed ${filePath} to ${newPath}`);
+            } else {
+                vscode.window.showErrorMessage(`Failed to rename ${filePath}`);
+            }
+        }
+    );
+}

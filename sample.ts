@@ -1,303 +1,172 @@
-def handle_listHomedirs(self) -> list:
-        """Lists all folders in the homedirs directory."""
+import logging
+import sandra
+from typing import TypedDict, Literal, List, NotRequired
+from vscode.rpc_service.base import BaseRpcService
+import pathlib
+
+logger = logging.getLogger(__name__)
+
+class CopyRenameParameters(TypedDict):
+    operation: Literal['rename', 'copy', 'directory_copy', 'directory_rename']
+    original_paths: List[str]
+    new_paths: List[str]
+    pull_up_original_on_rename: NotRequired[bool]
+
+class FileManagerService(BaseRpcService):
+    """File Manager proxy service for handling file operations in Sandra."""
+    
+    PREFIX = 'file'
+    stateless = True
+    
+    def __init__(self, globals, control_thread):
+        super().__init__(globals, control_thread)
+        self.db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
+
+    def handle_listHomedirs(self) -> list:
+        """Lists all folders and their subdirectories in a hierarchical structure."""
         try:
-            folders = []
-            for name in sandra.nameRange(dirname='/', db=self.db):
-                folders.append(name)
-            return folders
+            root_path = "/"
+            folder_tree = {}
+
+            # Sandra's walk to get a hierarchical structure of directories
+            for folder in sandra.walk(root=root_path, db=self.db, returnDirs=True, recurse=True):
+                parts = folder.strip("/").split("/")
+                current_level = folder_tree
+
+                # Traverse the hierarchy to insert subdirectories
+                for part in parts:
+                    if part not in current_level:
+                        current_level[part] = {}
+                    current_level = current_level[part]
+
+            # Convert dictionary format to list format expected by frontend
+            def convert_tree_to_list(tree):
+                return [{"name": key, "subfolders": convert_tree_to_list(value)} for key, value in tree.items()]
+
+            folder_list = convert_tree_to_list(folder_tree)
+            logger.info(f"Retrieved folder structure: {folder_list}")
+            return folder_list
+
         except Exception as e:
             logger.error(f"Failed to list homedirs: {str(e)}")
             return []
 
-==========================================
-
-def handle_deleteDirectory(self, dirPath: str, force: bool = False) -> bool:
-        """Deletes a directory in Sandra. If the directory is not empty, it can optionally clear the directory before deleting."""
+    def handle_renameDirectory(self, old_paths: List[str], new_paths: List[str]) -> bool:
+        """Renames a directory in Sandra."""
         try:
-            # Check if the directory is empty
-            contents = list(sandra.walk(root=dirPath, db=self.db, returnDirs=True, recurse=False))
-            if contents and not force:
-                return False  # Directory is not empty and force is not set
-
-            # If force is set, clear the directory
-            if contents and force:
-                for item in contents:
-                    obj = self.db.readobj(item)
-                    if obj:
-                        obj.delete()
-
-            # Delete the directory itself
-            dir_obj = self.db.readobj(dirPath)
-            if dir_obj:
-                dir_obj.delete()
-                return True
-            return False
+            self._copy_paths(CopyRenameParameters(
+                original_paths=old_paths,
+                new_paths=new_paths,
+                operation='directory_rename'
+            ))
+            return True
         except Exception as e:
-            logger.error(f"Failed to delete directory: {str(e)}")
+            logger.error(f"Failed to rename directory: {str(e)}")
             return False
 
+    def _copy_paths(self, parameters: CopyRenameParameters):
+        """
+        Copy with pymodule is different - you don't want to copy everything,
+        just the text, and you don't want to copy the previous object's vcInfo.
+        Set the modified flag to true.
+        """
+        operation = parameters['operation']
+        original_paths = parameters['original_paths']
+        new_paths = parameters['new_paths']
+        
+        # If the object user is renaming doesn't exist in front, that means there is a backing object.
+        # If the user specifies pull up to the front, we will do that, and the user can decide to delete it later.
+        pull_up = parameters.get('pull_up_original_on_rename', False)
+        operation_identifier = 'Directory' if operation.startswith('directory') else 'File'
 
-============================
+        # Wrap everything in a Sandra transaction
+        with self.db.transaction('Copying files') as trans:
+            for original_path, new_path in zip(original_paths, new_paths):
+                if not (original_obj := self.db.readobj(original_path)):
+                    raise RuntimeError(f"Can't complete {operation}, {original_path} doesn't exist in the current environment")
 
-private async deleteFile(filePath: string): Promise<void> {
-        if (!this.validateStagingArea(filePath)) {
-            vscode.window.showWarningMessage('Staging area validation failed. Cannot delete.');
-            return;
-        }
+                # Checking the correct types are there.
+                original_type_id = original_obj.TYPE_ID
+                if operation.startswith('directory') and original_type_id != 2:
+                    raise RuntimeError(f"Can't complete {operation}, {original_path} is not a directory")
 
-        const response = await this.proxyManager.sendRequest<boolean>(null, 'file:deleteDirectory', { dirPath: filePath, force: false });
-        if (!response) {
-            const proceed = await vscode.window.showWarningMessage('Directory is not empty. Do you want to clear it and proceed?', { modal: true }, 'Yes', 'No');
-            if (proceed === 'Yes') {
-                await this.proxyManager.sendRequest<boolean>(null, 'file:deleteDirectory', { dirPath: filePath, force: true });
-                vscode.window.showInformationMessage(`Cleared and deleted: ${filePath}`);
-            } else {
-                vscode.window.showInformationMessage('Deletion cancelled.');
-            }
-        } else {
-            vscode.window.showInformationMessage(`Deleted: ${filePath}`);
-        }
-    }
+                if not operation.startswith('directory') and original_type_id != 4:
+                    raise RuntimeError(f"Can't complete {operation}, {original_path} is not a PyModule")
 
+                if (new_obj := self.db.readobj(new_path)):
+                    type_id = new_obj.TYPE_ID
+                    existing_new_object_type = 'PyModule' if type_id == 4 else ('Directory' if type_id == 2 else f'UNKNOWN type with {type_id}')
+                    raise RuntimeError(f"Can't complete {operation}, An object with type {existing_new_object_type} already exists at {new_path}")
 
-==========================def handle_listHomedirs(self) -> list:
-    """Lists only directories (folders and subfolders) in the homedirs directory."""
-    try:
-        def get_subfolders(base_path):
-            subfolders = []
-            for name in sandra.nameRange(dirname=base_path, db=self.db, types=["Directory"]):  # Ensure only directories
-                full_path = f"{base_path}/{name}"
-                subfolders.append({
-                    "name": name,
-                    "subfolders": get_subfolders(full_path)  # Recursively get subfolders
-                })
-            return subfolders
+                if operation.startswith('directory'):
+                    copy_tree_contents = self.conn.copy_tree(original_path, srcdb=self.db, destdb=self.db, destPath=new_path)
+                    copied_files = copy_tree_contents[0]
+                    for obj in sandra.readObjects(copied_files, db=self.db):
+                        obj.modified = True
+                        obj.vcInfo = VCInfo()  # Reset vcInfo.
 
-        root_path = "/"
-        folders = []
-        for name in sandra.nameRange(dirname=root_path, db=self.db, types=["Directory"]):  # Filter for directories only
-            full_path = f"{root_path}/{name}"
-            folders.append({
-                "name": name,
-                "subfolders": get_subfolders(full_path)
-            })
+                    # By definition of rename, you should delete this.
+                    if operation == 'directory rename':
+                        if (first_db_obj := self.db.readobj(original_path)):
+                            self.conn.rmtree(original_path, self.db)
+                        if not first_db_obj and pull_up:
+                            self.conn.copy_tree(original_path, srcdb=self.db, destdb=self.db)
 
-        logger.info(f"Filtered folders for frontend: {folders}")
-        return folders
-    except Exception as e:
-        logger.error(f"Failed to list homedirs: {str(e)}")
-        return []
+                # Copying a single PyModule object
+                else:
+                    dirname = self.db.splitPath(new_path)[0]
+                    self.db.mkdir(dirname)
+                    new_module = PyModule(self.db, new_path)
+                    new_module.text = original_obj.text
+                    new_module.modified = True
+                    new_module.write()
 
+                if operation == 'rename':
+                    if (first_db_obj := self.db.readobj(original_path)):
+                        self.db.delete(original_path)
+                    if not first_db_obj and pull_up:
+                        self.conn.copy_from_backing_dbs(self.globals.qzenvuri, self.db, pathlib.PurePosixPath(original_path))
 
-+==============================
-
-def handle_delete(self, filePath: str, force: bool = False) -> bool:
+    def handle_delete(self, uriStr: str, recursive: bool) -> bool:
         """Recursively deletes all objects inside a directory and then deletes the directory itself in Sandra."""
+        from qz.sandra.utils import rmtree
+        from urllib.parse import urlparse
+
+        uri = urlparse(uriStr)
+        if recursive:
+            raise IOError("Recursive delete not supported")
+        self.db.delete(uri.path)
+        return True
+
+    def handle_deleteFolderContents(self, uriStr: str) -> bool:
+        """Deletes all objects inside a directory in Sandra."""
+        from qz.sandra.utils import rmtree
+        from urllib.parse import urlparse
+
+        uri = urlparse(uriStr)
+        directory_path = uri.path
+
+        # Get all objects inside the directory
+        objects = sandra.readObjects(directory_path, db=self.db)
+        for obj in objects:
+            obj.delete()
+
+        return True
+
+    def handle_move(self, oldPath: str, newPath: str) -> bool:
+        """Moves a file or folder in Sandra."""
         try:
-            def delete_contents(path):
-                contents = sandra.nameRange(dirname=path, db=self.db)
-                for item in contents:
-                    full_path = f"{path}/{item}"
-                    obj = self.db.readobj(full_path)
-                    if obj:
-                        if obj.type == "Directory":
-                            delete_contents(full_path)
-                        obj.delete()
-
-            delete_contents(filePath)
-
-            # Check if the directory is empty and delete it
-            remaining_objects = sandra.nameRange(dirname=filePath, db=self.db)
-            if not remaining_objects or force:
-                dir_obj = self.db.readobj(filePath)
-                if dir_obj:
-                    dir_obj.delete()
+            obj = self.db.readobj(oldPath)
+            if obj:
+                obj.rename(newPath)
                 return True
-            return False
         except Exception as e:
-            logger.error(f"Failed to delete directory: {str(e)}")
+            logger.error(f"Failed to move file: {str(e)}")
             return False
-
-
-
-======================================
-
-import vscode from 'vscode';
-import { FileManager } from './fileManager';
-import { MockProxyManager } from './mocks/proxyManager';
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
-import { MockInstanceStore } from './utils';
-import { container, cleanupTestContainer, prepareTestContainers } from './testDi';
-
-jest.mock("../../logging");
-
-describe('FileManager Test Suite', () => {
-    let fileManager: FileManager;
-    let proxyManager: MockProxyManager;
-    const mockedInstances = new MockInstanceStore();
-
-    beforeAll(() => {
-        prepareTestContainers();
-        proxyManager = new MockProxyManager();
-    });
-
-    afterAll(() => {
-        cleanupTestContainer();
-        jest.clearAllMocks();
-    });
-
-    beforeEach(() => {
-        fileManager = new FileManager(proxyManager);
-    });
-
-    afterEach(() => {
-        mockedInstances.restore();
-        jest.clearAllMocks();
-    });
-
-    describe('listHomedirsDirectories', () => {
-        test('should handle empty directory response', async () => {
-            proxyManager.nextResponse('file:listHomedirs', []);
-            await fileManager.listHomedirsDirectories();
-            expect(proxyManager.sendRequest).toHaveBeenCalledWith(
-                null, 
-                'file:listHomedirs',
-                undefined
-            );
-        });
-
-        test('should process valid directory structure', async () => {
-            const mockDirs = [
-                { 
-                    name: "test", 
-                    subdirectories: [
-                        { name: "subdir", subdirectories: [] }
-                    ]
-                }
-            ];
-            
-            proxyManager.nextResponse('file:listHomedirs', mockDirs);
-            const showSpy = mockedInstances.spyOn(fileManager, 'showHomedirsDirectoryTreeHierarcy');
-            
-            await fileManager.listHomedirsDirectories();
-            
-            expect(showSpy).toHaveBeenCalledWith(
-                mockDirs,
-                'Select a folder to manage'
-            );
-        });
-    });
-
-    describe('showHomedirsDirectoryTreeHierarcy', () => {
-        test('should handle directory selection', async () => {
-            const mockDirs = [
-                { name: "dir1", subdirectories: [] },
-                { name: "dir2", subdirectories: [] }
-            ];
-            
-            mockedInstances.mockImplementation('simpleCreateQuickPick', () => 'dir1');
-            const manageSpy = mockedInstances.spyOn(fileManager, 'manageFileActions');
-            
-            await fileManager.showHomedirsDirectoryTreeHierarcy(mockDirs, 'Test Title');
-            
-            expect(manageSpy).toHaveBeenCalledWith('dir1');
-        });
-
-        test('should handle nested directories', async () => {
-            const mockDirs = [
-                { 
-                    name: "parent",
-                    subdirectories: [
-                        { name: "child", subdirectories: [] }
-                    ]
-                }
-            ];
-            
-            mockedInstances.mockImplementationSequence('simpleCreateQuickPick', ['parent', 'child']);
-            const manageSpy = mockedInstances.spyOn(fileManager, 'manageFileActions');
-            
-            await fileManager.showHomedirsDirectoryTreeHierarcy(mockDirs, 'Test Title');
-            
-            expect(manageSpy).toHaveBeenCalledWith('child');
-        });
-    });
-
-    describe('deleteHomedirsDirectory', () => {
-        test('should handle successful deletion', async () => {
-            proxyManager.nextResponse('file:delete', true);
-            const showInfoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
-            await fileManager.deleteHomedirsDirectory('/test/path');
-            
-            expect(showInfoSpy).toHaveBeenCalledWith('Deleted: /test/path');
-        });
-
-        test('should handle force deletion', async () => {
-            proxyManager.nextResponse('file:delete', false);
-            mockedInstances.mockImplementation('showWarningMessage', () => 'Yes');
-            
-            await fileManager.deleteHomedirsDirectory('/test/path');
-            
-            expect(proxyManager.sendRequest).toHaveBeenCalledWith(
-                null,
-                'file:delete',
-                { dirPath: '/test/path', force: true }
-            );
-        });
-    });
-
-    describe('moveHomedirsDirectory', () => {
-        test('should handle valid move operation', async () => {
-            mockedInstances.mockImplementation('showInputBox', () => '/new/location');
-            proxyManager.nextResponse('file:move', true);
-            const showInfoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
-            await fileManager.moveHomedirsDirectory('/old/path');
-            
-            expect(showInfoSpy).toHaveBeenCalledWith('Moved to: /new/location');
-            expect(proxyManager.sendRequest).toHaveBeenCalledWith(
-                null,
-                'file:move',
-                '/old/path',
-                '/new/location'
-            );
-        });
-
-        test('should cancel on empty location', async () => {
-            mockedInstances.mockImplementation('showInputBox', () => undefined);
-            const sendSpy = jest.spyOn(proxyManager, 'sendRequest');
-            
-            await fileManager.moveHomedirsDirectory('/old/path');
-            
-            expect(sendSpy).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('manageFileActions', () => {
-        test('should handle delete action', async () => {
-            mockedInstances.mockImplementation('simpleCreateQuickPick', () => 'Delete');
-            const deleteSpy = mockedInstances.spyOn(fileManager, 'deleteHomedirsDirectory');
-            
-            await fileManager.manageFileActions('/test/path');
-            
-            expect(deleteSpy).toHaveBeenCalledWith('/test/path');
-        });
-
-        test('should handle move action', async () => {
-            mockedInstances.mockImplementation('simpleCreateQuickPick', () => 'Move');
-            const moveSpy = mockedInstances.spyOn(fileManager, 'moveHomedirsDirectory');
-            
-            await fileManager.manageFileActions('/test/path');
-            
-            expect(moveSpy).toHaveBeenCalledWith('/test/path');
-        });
-    });
-
-    describe('dispose', () => {
-        test('should dispose resources', () => {
-            const disposeSpy = jest.spyOn(fileManager['trash'], 'dispose');
-            fileManager.dispose();
-            expect(disposeSpy).toHaveBeenCalled();
-        });
-    });
-});
+    
+    def handle_validateUser(self, filePath: str) -> bool:
+        """Validates if the staging area was created by the current user."""
+        obj = self.db.readobj(filePath)
+        if obj and obj.meta.get('created_by') == sandra.USERNAME:
+            return True
+        return False

@@ -7,7 +7,7 @@ import pathlib
 logger = logging.getLogger(__name__)
 
 class CopyRenameParameters(TypedDict):
-    operation: Literal['rename', 'copy', 'directory_copy', 'directory_rename']
+    operation: Literal['rename', 'directory_rename']
     original_paths: List[str]
     new_paths: List[str]
     pull_up_original_on_rename: NotRequired[bool]
@@ -90,12 +90,9 @@ class FileManagerService(BaseRpcService):
                 if operation.startswith('directory') and original_type_id != 2:
                     raise RuntimeError(f"Can't complete {operation}, {original_path} is not a directory")
 
-                if not operation.startswith('directory') and original_type_id != 4:
-                    raise RuntimeError(f"Can't complete {operation}, {original_path} is not a PyModule")
-
                 if (new_obj := self.db.readobj(new_path)):
                     type_id = new_obj.TYPE_ID
-                    existing_new_object_type = 'PyModule' if type_id == 4 else ('Directory' if type_id == 2 else f'UNKNOWN type with {type_id}')
+                    existing_new_object_type = 'Directory' if type_id == 2 else f'UNKNOWN type with {type_id}'
                     raise RuntimeError(f"Can't complete {operation}, An object with type {existing_new_object_type} already exists at {new_path}")
 
                 if operation.startswith('directory'):
@@ -111,21 +108,6 @@ class FileManagerService(BaseRpcService):
                             self.conn.rmtree(original_path, self.db)
                         if not first_db_obj and pull_up:
                             self.conn.copy_tree(original_path, srcdb=self.db, destdb=self.db)
-
-                # Copying a single PyModule object
-                else:
-                    dirname = self.db.splitPath(new_path)[0]
-                    self.db.mkdir(dirname)
-                    new_module = PyModule(self.db, new_path)
-                    new_module.text = original_obj.text
-                    new_module.modified = True
-                    new_module.write()
-
-                if operation == 'rename':
-                    if (first_db_obj := self.db.readobj(original_path)):
-                        self.db.delete(original_path)
-                    if not first_db_obj and pull_up:
-                        self.conn.copy_from_backing_dbs(self.globals.qzenvuri, self.db, pathlib.PurePosixPath(original_path))
 
     def handle_delete(self, uriStr: str, recursive: bool) -> bool:
         """Recursively deletes all objects inside a directory and then deletes the directory itself in Sandra."""
@@ -172,7 +154,29 @@ class FileManagerService(BaseRpcService):
         return False
 
 
-====================
+
+=================================
+
+async renameHomedirsDirectory(filePath: string): Promise<void> {
+        const oldUri = vscode.Uri.parse(`sandra:${filePath}`);
+        const oldSandraPath = SandraFileSystemProvider.parseSandraPath(oldUri);
+        const parentPath = path.posix.dirname(oldSandraPath);
+        const oldName = path.posix.basename(oldSandraPath);
+        const newName = await vscode.window.showInputBox({ prompt: 'Enter new name', value: oldName });
+        if (!newName) return;
+        const newPath = path.posix.join(parentPath, newName);
+        const response = await this.proxyManager.sendRequest<boolean>(null, 'file:renameDirectory', [oldSandraPath], [newPath]);
+        if (response) {
+            vscode.window.showInformationMessage(`Renamed to: ${newName}`);
+        } else {
+            vscode.window.showErrorMessage(`Failed to rename ${oldName}`);
+        }
+        this.signalFilesChanged([oldUri], vscode.FileChangeType.Changed);
+    }
+
+====================================
+
+
 
 def _rename_paths(self, old_paths: List[str], new_paths: List[str], is_directory: bool):
     """
@@ -196,3 +200,18 @@ def _rename_paths(self, old_paths: List[str], new_paths: List[str], is_directory
 
             # Rename the object
             original_obj.rename(new_path)
+
+
+def handle_rename(self, oldPaths: List[str], newPaths: List[str], is_directory: bool) -> bool:
+    """
+    Handles renaming in the user homedirs.
+    """
+    try:
+        self._rename_paths(oldPaths, newPaths, is_directory)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to rename {oldPaths} to {newPaths}: {str(e)}")
+        return False
+
+
+==================================

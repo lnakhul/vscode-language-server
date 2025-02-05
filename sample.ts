@@ -170,3 +170,29 @@ class FileManagerService(BaseRpcService):
         if obj and obj.meta.get('created_by') == sandra.USERNAME:
             return True
         return False
+
+
+====================
+
+def _rename_paths(self, old_paths: List[str], new_paths: List[str], is_directory: bool):
+    """
+    Handles renaming of files or directories in Sandra.
+    """
+    operation = 'directory_rename' if is_directory else 'rename'
+    with self.srcdb.transaction('Renaming paths'):
+        for old_path, new_path in zip(old_paths, new_paths):
+            original_obj = self.srcdb.readobj(old_path)
+            if not original_obj:
+                raise RuntimeError(f"{old_path} does not exist.")
+
+            if is_directory and original_obj.TYPE_ID != 2:
+                raise RuntimeError(f"{old_path} is not a directory.")
+
+            if not is_directory and original_obj.TYPE_ID != 4:
+                raise RuntimeError(f"{old_path} is not a file.")
+
+            if self.srcdb.readobj(new_path):
+                raise RuntimeError(f"{new_path} already exists.")
+
+            # Rename the object
+            original_obj.rename(new_path)

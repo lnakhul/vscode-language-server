@@ -248,3 +248,25 @@ async renameHomedirsDirectory(filePath: string): Promise<void> {
         }
     );
 }
+
+
+===================
+
+def flatten_homedirs(self, homedirs: List[dict], parent_path: str = '') -> List[str]:
+        """Flattens the hierarchical structure of homedirs into a list of paths."""
+        paths = []
+        for dir in homedirs:
+            current_path = f"{parent_path}/{dir['name']}".strip('/')
+            paths.append(current_path)
+            if 'subfolders' in dir and dir['subfolders']:
+                paths.extend(self.flatten_homedirs(dir['subfolders'], current_path))
+        return paths
+
+    async def handle_autocompletePath(self, prefix: str, max_entries: int = 0):
+        homedirs = self.handle_listHomedirs()
+        all_paths = self.flatten_homedirs(homedirs)
+        results = [path for path in all_paths if path.startswith(prefix)]
+        if max_entries:
+            results = results[:max_entries]
+        logger.info(f"Autocomplete results for prefix '{prefix}': {results}")
+        return results

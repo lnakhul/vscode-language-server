@@ -303,3 +303,30 @@ async showInputBoxWithAutocomplete(prompt: string): Promise<string | undefined> 
         quickPick.show();
     });
 }
+
+
+=================
+
+async showInputBoxWithAutocomplete(prompt: string): Promise<string | undefined> {
+        const quickPick = await simpleCreateQuickPick<string>({
+            choices: [],
+            title: prompt,
+            allowUserChoice: true,
+            errorMessage: 'No matching directories found',
+            validateInput: async (value) => {
+                if (!value.trim()) {
+                    return 'No matching directories found';
+                }
+
+                const suggestions = await this.proxyManager.sendRequest<string[]>(null, 'file:autocompletePath', value, 10);
+                console.log(`Autocomplete suggestions for '${value}':`, suggestions);
+
+                quickPick.items = suggestions.map(dir => ({ label: dir, value: dir }));
+                return undefined;
+            },
+            convertInput: (input) => input
+        });
+
+        return quickPick;
+    }
+

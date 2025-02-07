@@ -270,3 +270,36 @@ def flatten_homedirs(self, homedirs: List[dict], parent_path: str = '') -> List[
             results = results[:max_entries]
         logger.info(f"Autocomplete results for prefix '{prefix}': {results}")
         return results
+
+
+
+=====================
+
+async showInputBoxWithAutocomplete(prompt: string): Promise<string | undefined> {
+    const quickPick = vscode.window.createQuickPick();
+    quickPick.placeholder = prompt;
+    quickPick.matchOnDescription = true;
+    quickPick.matchOnDetail = true;
+
+    quickPick.onDidChangeValue(async (value) => {
+        if (!value.trim()) {
+            quickPick.items = [];
+            return;
+        }
+
+        const suggestions = await this.proxyManager.sendRequest<string[]>(null, 'file:autocompletePath', value, 10);
+        console.log(`Autocomplete suggestions for '${value}':`, suggestions);
+
+        quickPick.items = suggestions.map(dir => ({ label: dir }));
+    });
+
+    return new Promise((resolve) => {
+        quickPick.onDidAccept(() => {
+            resolve(quickPick.selectedItems[0]?.label);
+            quickPick.hide();
+        });
+
+        quickPick.onDidHide(() => quickPick.dispose());
+        quickPick.show();
+    });
+}

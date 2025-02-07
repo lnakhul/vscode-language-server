@@ -330,3 +330,31 @@ async showInputBoxWithAutocomplete(prompt: string): Promise<string | undefined> 
         return quickPick;
     }
 
+================================
+
+async showInputBoxWithAutocomplete(prompt: string): Promise<string | undefined> {
+    let choices: string[] = [];
+
+    return new Promise(async (resolve) => {
+        // Fetch initial suggestions
+        choices = await this.proxyManager.sendRequest<string[]>(null, 'file:autocompletePath', '', 10);
+
+        const selectedValue = await simpleCreateQuickPick({
+            choices,
+            title: prompt,
+            allowUserChoice: true, // Allow user to enter custom input
+            errorMessage: 'No matching directories found',
+            validateInput: async (value: string) => {
+                if (!value.trim()) return;
+
+                // Fetch new autocomplete suggestions dynamically
+                choices = await this.proxyManager.sendRequest<string[]>(null, 'file:autocompletePath', value, 10);
+                console.log(`Updated autocomplete suggestions for '${value}':`, choices);
+
+                return undefined; // No validation error
+            }
+        });
+
+        resolve(selectedValue);
+    });
+}

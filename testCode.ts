@@ -1,258 +1,305 @@
-import logging
-import sandra
-from vscode.rpc_service.base import BaseRpcService
-import pathlib
-
-logger = logging.getLogger(__name__)
-
-class FileManagerService(BaseRpcService):
-    """File Manager proxy service for handling file operations in Sandra."""
-    
-    PREFIX = 'file'
-    stateless = True
-    
-    def __init__(self, globals, control_thread):
-        super().__init__(globals, control_thread)
-        self.db = sandra.connect(f"homedirs/home/{sandra.USERNAME}")
-
-    def handle_listHomedirs(self) -> list:
-        """Lists all folders and their subdirectories in a hierarchical structure."""
-        try:
-            root_path = "/"
-            folder_tree = {}
-
-            # Sandra's walk to get a hierarchical structure of directories
-            for folder in sandra.walk(root=root_path, db=self.db, returnDirs=True, recurse=True):
-                parts = folder.strip("/").split("/")
-                current_level = folder_tree
-
-                # Traverse the hierarchy to insert subdirectories
-                for part in parts:
-                    if part not in current_level:
-                        current_level[part] = {}
-                    current_level = current_level[part]
-
-            # Convert dictionary format to list format expected by frontend
-            def convert_tree_to_list(tree):
-                return [{"name": key, "subfolders": convert_tree_to_list(value)} for key, value in tree.items()]
-
-            folder_list = convert_tree_to_list(folder_tree)
-            logger.info(f"Retrieved folder structure: {folder_list}")
-            return folder_list
-
-        except Exception as e:
-            logger.error(f"Failed to list homedirs: {str(e)}")
-            return []
-
-    def handle_rename(self, parentPath: str, oldName: str, newName: str) -> bool:
-        """Renames a file or folder in Sandra."""
-        try:
-            oldPath = f"{parentPath}/{oldName}"
-            newPath = f"{parentPath}/{newName}"
-            obj = self.db.readobj(oldPath)
-            if obj:
-                obj.rename(newPath)
-                return True
-        except Exception as e:
-            logger.error(f"Failed to rename: {str(e)}")
-            return False
-
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { Trash } from './utils';
-import { ProxyManager } from './proxyManager';
-import { simpleCreateQuickPick } from './commonPickers';
-import { SandraFileSystemProvider } from './SandraFsProvider';
+import { AbstractTreeBaseNode, ExplorerTreeBaseNode } from './explorer'; // Adjust import path
+import { Trash } from '/utils'; // Your existing utility
 
-interface HomedirsStructure {
-    name: string;
-    subdirectories: HomedirsStructure[];
+interface GenericNodeData {
+    id: string;
+    label: string;
+    hasChildren?: boolean;
+    // ...additional fields that come back from your Shell API or DB
 }
 
-export class FileManager implements vscode.Disposable {
-    private trash: Trash;
-    private fileChangeEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-    private watchedUris = new Map<string, any>();
+/**
+ * GenericTreeNode
+ * --------------
+ * Represents one node in our Generic Tree. Each node is constructed
+ * from the data we get back from the Shell API. If hasChildren === true,
+ * then getChildren() will call the Shell API to fetch child nodes.
+ */
+export class GenericTreeNode extends AbstractTreeBaseNode {
+    private _data: GenericNodeData;
+    private _children: ExplorerTreeBaseNode[] | null = null; // null indicates "not yet fetched"
 
-    constructor(private proxyManager: ProxyManager) {
-        this.trash = new Trash(...this.register());
+    constructor(data: GenericNodeData, parent?: ExplorerTreeBaseNode) {
+        super(parent);
+        this._data = data;
+
+        // Give this node a unique ID (the parent's ID plus our own, if desired):
+        this.id = data.id || parent?.id || 'GenericTreeNode';
     }
 
-    *register(): Generator<vscode.Disposable> {
-        yield vscode.commands.registerCommand('quartz.deleteFile', this.deleteHomedirsDirectory, this);
-        yield vscode.commands.registerCommand('quartz.renameFile', this.renameHomedirsDirectory, this);
-        yield vscode.commands.registerCommand('quartz.deleteFolderContents', this.deleteFolderContents, this);
-        yield vscode.commands.registerCommand('quartz.showFileTree', this.listHomedirsDirectories, this);
-    }
-
-    async listHomedirsDirectories(): Promise<void> {
-        const homedirsDirectories: HomedirsStructure[] = await this.proxyManager.sendRequest<HomedirsStructure[]>(null, 'file:listHomedirs');
-        if (!homedirsDirectories || homedirsDirectories.length === 0) return;
-        await this.showHomedirsDirectoryTreeHierarcy(homedirsDirectories, 'Select a folder to manage');
-    }
-
-    async showHomedirsDirectoryTreeHierarcy(homedirsDirectories: HomedirsStructure[], title: string, parentPath: string = ''): Promise<void> {
-        const choices = homedirsDirectories.map(directory => directory.name);
-        
-        const selectedDirectoryName = await simpleCreateQuickPick({
-            choices,
-            title,
-            allowUserChoice: false,
-            errorMessage: 'No folder selected'
-        });
-
-        if (!selectedDirectoryName) return;
-        const selectedDirectory = homedirsDirectories.find(directory => directory.name === selectedDirectoryName);
-        if (!selectedDirectory) return;
-
-        const fullPath = path.posix.join(parentPath, selectedDirectoryName);
-
-        selectedDirectory.subdirectories = selectedDirectory.subdirectories || [];
-        if (selectedDirectory.subdirectories.length) {
-            await this.showHomedirsDirectoryTreeHierarcy(selectedDirectory.subdirectories, `Select a folder to manage in ${selectedDirectoryName}`, fullPath);
-        } else {
-            await this.manageFileActions(fullPath);
-        }
-    }
-
-    async manageFileActions(filePath: string): Promise<void> {
-        const choices = ['Delete', 'Rename'];
-        const action = await simpleCreateQuickPick({
-            choices,
-            title: 'Select an action',
-            allowUserChoice: false,
-            errorMessage: 'No action selected'
-        });
-        if (!action) return;
-
-        switch (action) {
-            case 'Delete':
-                await this.deleteHomedirsDirectory(filePath);
-                break;
-            case 'Rename':
-                await this.renameHomedirsDirectory(filePath);
-                break;
-        }
-    }
-
-    async deleteHomedirsDirectory(filePath: string): Promise<void> {
-        const uri = vscode.Uri.parse(`sandra:${filePath}`);
-        const sandraPath = SandraFileSystemProvider.parseSandraPath(uri);
-        const response = await this.proxyManager.sendRequest<boolean>(null, 'file:delete', sandraPath, true);
-        if (!response) {
-            const proceed = await vscode.window.showWarningMessage(`Are you sure you want to delete ${filePath}?`, {modal: true}, 'Yes', 'No');
-            if (proceed === 'Yes') {
-                await this.proxyManager.sendRequest<boolean>(null, 'file:delete', sandraPath, true);
-                vscode.window.showInformationMessage(`Deleted: ${filePath}`);
-            } else {
-                vscode.window.showInformationMessage(`Deletion of ${filePath} cancelled`);
-            }
-        } else {
-            vscode.window.showInformationMessage(`Deleted: ${filePath}`);
-        }
-        this.signalFilesChanged([uri], vscode.FileChangeType.Deleted);
-    }
-
-    async deleteFolderContents(): Promise<void> {
-        const folderPath = await vscode.window.showInputBox({ prompt: 'Enter the folder path to delete contents' });
-        if (!folderPath) return;
-        const uri = vscode.Uri.parse(`sandra:${folderPath}`);
-        const sandraPath = SandraFileSystemProvider.parseSandraPath(uri);
-        const response = await this.proxyManager.sendRequest<boolean>(null, 'file:deleteFolderContents', sandraPath);
-        if (response) {
-            vscode.window.showInformationMessage(`Contents of ${folderPath} deleted`);
-        } else {
-            vscode.window.showErrorMessage(`Failed to delete contents of ${folderPath}`);
-        }
-        this.signalFilesChanged([uri], vscode.FileChangeType.Changed);
-    }
-
-    async renameHomedirsDirectory(filePath: string): Promise<void> {
-        const oldUri = vscode.Uri.parse(`sandra:${filePath}`);
-        const oldSandraPath = SandraFileSystemProvider.parseSandraPath(oldUri);
-        const parentPath = path.posix.dirname(oldSandraPath);
-        const oldName = path.posix.basename(oldSandraPath);
-        const newName = await vscode.window.showInputBox({ prompt: 'Enter new name', value: oldName });
-        if (!newName) return;
-        const response = await this.proxyManager.sendRequest<boolean>(null, 'file:rename', parentPath, oldName, newName);
-        if (response) {
-            vscode.window.showInformationMessage(`Renamed to: ${newName}`);
-        } else {
-            vscode.window.showErrorMessage(`Failed to rename ${oldName}`);
-        }
-        this.signalFilesChanged([oldUri], vscode.FileChangeType.Changed);
-    }
-
-    private uriToKey(uri: vscode.Uri): string {
-        return uri.toString(true);
-    }
-
-    private signalFilesChanged(uris: vscode.Uri[], changeType: vscode.FileChangeType): void {
-        const matched = [];
-        for (const uri of uris) {
-            if (uri.scheme === 'sandra') {
-                const options = this.watchedUris.get(this.uriToKey(uri));
-                if (options) {
-                    // TODO: handle recursive and exclude options
-                    matched.push(uri);
-                }
-            }
-        }
-
-        if (matched.length) {
-            this.fileChanged(matched, changeType);
-        }
-    }
-
-    private fileChanged(uris: vscode.Uri[], changeType: vscode.FileChangeType): void {
-        this.fileChangeEmitter.fire(
-            uris.map(uri => ({ type: changeType, uri }))
+    /**
+     * getTreeItem
+     * -----------
+     * Return the VSCode TreeItem for this node. 
+     * This can be async or sync.
+     */
+    async getTreeItem(): Promise<vscode.TreeItem> {
+        const treeItem = new vscode.TreeItem(
+            this._data.label,
+            this._data.hasChildren
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None
         );
+
+        // Optionally set contextValue for custom commands in package.json
+        treeItem.contextValue = 'genericTreeNode';
+        treeItem.tooltip = `ID: ${this._data.id}`;
+
+        return treeItem;
     }
 
-    dispose(): void {
-        this.trash.dispose();
+    /**
+     * getChildren
+     * -----------
+     * Called by VS Code to expand this node and retrieve children.
+     * If `hasChildren` is true, we fetch them. Otherwise, return empty array.
+     */
+    async getChildren(): Promise<ExplorerTreeBaseNode[]> {
+        if (!this._data.hasChildren) {
+            return [];
+        }
+
+        // If we have already fetched children, return them
+        if (this._children) {
+            return this._children;
+        }
+
+        try {
+            // STUB: Example call out to your Shell API / database / proxy
+            const shellApiData: GenericNodeData[] = await fakeShellApiFetchChildren(this._data.id);
+
+            // Map each child’s data into a GenericTreeNode
+            this._children = shellApiData.map(
+                (childData) => new GenericTreeNode(childData, this /* parent */)
+            );
+
+            return this._children;
+        } catch (error) {
+            // Gracefully handle errors:
+            console.error('Error fetching child nodes:', error);
+            vscode.window.showErrorMessage(`Could not load children for ${this._data.label}`);
+            // Return empty so the tree can still render
+            return [];
+        }
     }
-}    
+}
+
+/**
+ * Stub method to simulate a backend call to fetch child nodes.
+ * Replace this with your actual Sandra / Shell API call.
+ */
+async function fakeShellApiFetchChildren(parentId: string): Promise<GenericNodeData[]> {
+    // In production, you'd do something like:
+    // return shellApi.getChildNodes(parentId);
+
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve([
+                { id: `${parentId}-child-1`, label: `Child 1 of ${parentId}`, hasChildren: false },
+                { id: `${parentId}-child-2`, label: `Child 2 of ${parentId}`, hasChildren: true },
+            ]);
+        }, 500);
+    });
+}
 
 
-===================================================================
+================================
+
+import { BaseTreeDataProvider, ExplorerTreeBaseNode } from './explorer'; // Adjust import path
+import * as vscode from 'vscode';
+import { GenericTreeNode } from './GenericTreeNode'; // Adjust import path
+
+/**
+ * GenericTreeDataProvider
+ * -----------------------
+ * Provides data to the Generic Tree. 
+ * - Manages top-level nodes
+ * - Re-fetches data on refresh
+ * - Integrates with Shell API
+ */
+export class GenericTreeDataProvider extends BaseTreeDataProvider {
+    private _rootNodes: ExplorerTreeBaseNode[] = [];
+    private _onDidChangeTreeData: vscode.EventEmitter<ExplorerTreeBaseNode | undefined> = 
+        new vscode.EventEmitter<ExplorerTreeBaseNode | undefined>();
+
+    readonly onDidChangeTreeData: vscode.Event<ExplorerTreeBaseNode | undefined> = 
+        this._onDidChangeTreeData.event;
+
+    private _busy = false;
+    private _lastError: Error | null = null;
+
+    constructor() {
+        super();
+        // Optionally load initial data right away:
+        this.refresh();
+    }
+
+    /**
+     * getChildren
+     * -----------
+     * Returns children of a given node. If no node is passed, returns top-level nodes.
+     */
+    async getChildren(element?: ExplorerTreeBaseNode): Promise<ExplorerTreeBaseNode[]> {
+        if (element) {
+            // Defer to the node’s getChildren
+            return element.getChildren();
+        }
+
+        // This is the top-level call
+        // If we had an error previously, show an error node or empty
+        if (this._lastError) {
+            // Optionally we can create a special "error node", or just return empty
+            return [];
+        }
+
+        // If the data is still being fetched, you could return a "Loading" node
+        if (this._busy) {
+            // Alternatively, return an empty array for now
+            return [new GenericLoadingNode()];
+        }
+
+        // Otherwise, return the main root nodes
+        return this._rootNodes;
+    }
+
+    /**
+     * refresh
+     * -------
+     * Public method to re-fetch data from the backend and update the tree.
+     */
+    async refresh(): Promise<void> {
+        try {
+            this._busy = true;
+            this._lastError = null;
+            this._rootNodes = [];
+
+            // Example: fetch from Shell API
+            const topLevelData = await fakeShellApiFetchRoot();
+
+            // Convert each piece of data into a GenericTreeNode
+            this._rootNodes = topLevelData.map(
+                (nodeData) => new GenericTreeNode(nodeData)
+            );
+
+        } catch (error: any) {
+            this._lastError = error;
+            console.error('Error fetching top-level data for tree:', error);
+            vscode.window.showErrorMessage(`Failed to refresh Generic Tree: ${error.message}`);
+        } finally {
+            this._busy = false;
+            // Force the tree to update
+            this._onDidChangeTreeData.fire(undefined);
+        }
+    }
+
+    /**
+     * dispose
+     * -------
+     * Clean up disposables. 
+     */
+    dispose() {
+        // If any nodes hold onto disposables, you can call dispose on them.
+        this._rootNodes.forEach(node => node.dispose());
+    }
+}
+
+/**
+ * Minimal Node to represent "Loading..." in the tree.
+ */
+class GenericLoadingNode extends GenericTreeNode {
+    constructor() {
+        super({ id: 'loading', label: 'Loading...', hasChildren: false });
+    }
+
+    async getChildren(): Promise<ExplorerTreeBaseNode[]> {
+        return [];
+    }
+}
+
+/**
+ * Stub method simulating a top-level fetch from your Shell API.
+ */
+async function fakeShellApiFetchRoot(): Promise<{id: string; label: string; hasChildren: boolean}[]> {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve([
+                { id: 'root-1', label: 'Root 1', hasChildren: true },
+                { id: 'root-2', label: 'Root 2', hasChildren: false },
+            ]);
+        }, 300);
+    });
+}
 
 
-def handle_delete(self, uriStr: str, recursive: bool) -> bool:
-        """Recursively deletes all objects inside a directory and then deletes the directory itself in Sandra."""
-        from qz.sandra.utils import rmtree
-        from urllib.parse import urlparse
+=====================
 
-        uri = urlparse(uriStr)
-        if recursive:
-            raise IOError("Recursive delete not supported")
-        self.db.delete(uri.path)
-        return True
+import * as vscode from 'vscode';
+import { BaseTreeExplorerView } from './explorer'; // Adjust import path
+import { GenericTreeDataProvider } from './GenericTreeDataProvider'; // Adjust import path
 
-    def handle_deleteFolderContents(self, uriStr: str) -> bool:
-        """Deletes all objects inside a directory in Sandra."""
-        from qz.sandra.utils import rmtree
-        from urllib.parse import urlparse
+/**
+ * GenericTreeExplorerView
+ * -----------------------
+ * Manages registration of the TreeDataProvider with VS Code 
+ * and any additional functionality like QuickPick selections 
+ * or shell commands that alter the tree.
+ */
+export class GenericTreeExplorerView extends BaseTreeExplorerView {
+    protected treeDataProvider: GenericTreeDataProvider;
 
-        uri = urlparse(uriStr)
-        rmtree(uri.path, db=self.db, dryRun=False)
-        return True
+    constructor() {
+        super();
+        this.treeDataProvider = new GenericTreeDataProvider();
+        // Create the treeView
+        this.newTreeView();
+    }
 
-    def handle_move(self, oldPath: str, newPath: str) -> bool:
-        """Moves a file or folder in Sandra."""
-        try:
-            obj = self.db.readobj(oldPath)
-            if obj:
-                obj.rename(newPath)
-                return True
-        except Exception as e:
-            logger.error(f"Failed to move file: {str(e)}")
-            return False
-    
-    def handle_validateUser(self, filePath: str) -> bool:
-        """Validates if the staging area was created by the current user."""
-        obj = self.db.readobj(filePath)
-        if obj and obj.meta.get('created_by') == sandra.USERNAME:
-            return True
-        return False
+    /**
+     * The unique ID for this view, as referenced in package.json contributes.views
+     */
+    viewId(): string {
+        return 'myExtension.genericTreeView';
+    }
+
+    /**
+     * Refresh the entire tree by telling our data provider to re-fetch data.
+     */
+    async refreshTree(): Promise<void> {
+        await this.treeDataProvider.refresh();
+    }
+
+    /**
+     * Example method that uses a QuickPick to decide which “mode” or “data set” 
+     * to load in the tree. This is optional, but shows how you might 
+     * integrate a user-facing QuickPick to pivot the tree’s data.
+     */
+    async pickDataSource(): Promise<void> {
+        const picks = [
+            { label: 'Data Source A', description: 'Load data set A' },
+            { label: 'Data Source B', description: 'Load data set B' },
+        ];
+
+        const choice = await vscode.window.showQuickPick(picks, {
+            placeHolder: 'Pick your desired data source',
+        });
+        if (!choice) {
+            return; // user cancelled
+        }
+
+        try {
+            // In a real extension, you'd do something with the choice 
+            // (e.g., call a different endpoint, set a flag, etc.).
+            // For demonstration:
+            vscode.window.showInformationMessage(`Loading from ${choice.label}...`);
+
+            // Possibly pass that choice to the data provider
+            // e.g. this.treeDataProvider.setDataSource(choice.label);
+            // Then refresh:
+            await this.treeDataProvider.refresh();
+        } catch (error) {
+            console.error('Error picking data source:', error);
+            vscode.window.showErrorMessage('Failed to load the selected data source.');
+        }
+    }
+}

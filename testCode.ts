@@ -71,3 +71,39 @@ class ShellAPI {
 }
 
 export const shellAPI = ShellAPI.getInstance();
+
+
+====================
+
+
+public registerAdditionalViewsAndCommands(context: vscode.ExtensionContext): void {
+        // Register the bookmark explorer view
+        const bookmarkExplorer = new BookmarkExplorer();
+        this.registerTreeView('quartz.bookmarkExplorer', new BookmarksDataProvider(), bookmarkExplorer);
+
+        // Register the shelves explorer view
+        const shelvesExplorer = new ShelvesExplorer();
+        this.registerTreeView('quartz.shelvesExplorer', new ShelfAreasDataProvider(), shelvesExplorer);
+
+        // Register the switchTreeView command
+        context.subscriptions.push(
+            vscode.commands.registerCommand('quartz.switchTreeView', async () => {
+                const registeredViews = this.getRegisteredViews();
+                const items = registeredViews.map(view => ({ label: view.id }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: 'Select a tree view to switch to',
+                });
+
+                if (selected) {
+                    const view = this.getTreeViewById(selected.label);
+                    if (view) {
+                        const rootNode = await view.dataProvider.getChildren();
+                        if (rootNode.length > 0) {
+                            await view.explorerView.reveal(rootNode[0]);
+                        }
+                    }
+                }
+            })
+        );
+    }

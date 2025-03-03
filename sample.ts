@@ -1,4 +1,4 @@
-// quartzShell.ts
+Kid// quartzShell.ts
 import { ProxyManager } from './proxyManager'; // or wherever
 
 export interface GenericTreeItemData {
@@ -222,4 +222,100 @@ export class GenericTreeExplorerView extends BaseTreeExplorerView {
             await this.refreshTree();
         }
     }
+}
+
+=================
+// extension.ts
+
+import * as vscode from 'vscode';
+import { QuartzShell } from './quartzShell';
+import { GenericTreeExplorerView } from './genericTreeExplorer';
+import { MyProxyManager } from './proxyManager';
+
+export function activate(context: vscode.ExtensionContext) {
+    // 1) Create your proxy manager
+    const proxy = new MyProxyManager();
+    // 2) Create your shell
+    const shell = new QuartzShell(proxy);
+    // 3) Create the tree
+    const genericView = new GenericTreeExplorerView(shell);
+
+    // 4) Register a command to refresh
+    context.subscriptions.push(
+        vscode.commands.registerCommand('quartz.genericTree.refresh', async () => {
+            await genericView.refreshTree();
+        })
+    );
+
+    // 5) Register a command to add a new provider
+    context.subscriptions.push(
+        vscode.commands.registerCommand('quartz.genericTree.registerProvider', async () => {
+            const providerId = await vscode.window.showInputBox({
+                prompt: 'Enter provider ID'
+            });
+            if (!providerId) return;
+
+            // For demonstration, pass a trivial config
+            const config = { label: `Provider ${providerId}`, something: 'foo' };
+            await genericView.registerProvider(providerId, config);
+        })
+    );
+
+    // 6) Example command to execute a user command on a node
+    context.subscriptions.push(
+        vscode.commands.registerCommand('quartz.genericTree.executeUserCommand', async (node) => {
+            // 'node' might be a GenericTreeNode with providerId + data
+            if (!node || !node.data) {
+                return;
+            }
+            const result = await shell.executeUserCommand(node.providerId, 'addChild', {
+                parentId: node.data.id,
+                label: 'NewKid'
+            });
+            vscode.window.showInformationMessage(JSON.stringify(result));
+            // Then refresh
+            await genericView.refreshTree();
+        })
+    );
+}
+
+export function deactivate() {}
+
+
+========
+
+{
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "quartz.genericTreeView",
+          "name": "Generic Tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "quartz.genericTree.refresh",
+        "title": "Refresh Generic Tree"
+      },
+      {
+        "command": "quartz.genericTree.registerProvider",
+        "title": "Register a New Provider"
+      },
+      {
+        "command": "quartz.genericTree.executeUserCommand",
+        "title": "Execute a User Command on Node"
+      }
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "quartz.genericTree.executeUserCommand",
+          "when": "viewItem == genericTreeItem",
+          "group": "inline"
+        }
+      ]
+    }
+  }
 }

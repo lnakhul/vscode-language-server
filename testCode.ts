@@ -107,3 +107,60 @@ public registerAdditionalViewsAndCommands(context: vscode.ExtensionContext): voi
             })
         );
     }
+
+
+===============
+
+    // genericTreeExplorer.ts (or data provider)
+public *register(): Generator<vscode.Disposable> {
+  yield vscode.commands.registerCommand('genericTree.createItem', async (node?: GenericTreeNode) => {
+    if (!node) {
+      vscode.window.showWarningMessage('Please select a node to create an item under.');
+      return;
+    }
+    const label = await vscode.window.showInputBox({ prompt: 'Enter label for new item' });
+    if (!label) return;
+
+    await this.shell.executeUserCommand(node.providerId, 'createItem', {
+      parentId: node.data.id,  // if you want to attach under the selected node
+      label: label,
+      type: 'Folder'
+    });
+    await this.refresh();
+  });
+
+  yield vscode.commands.registerCommand('genericTree.removeItem', async (node?: GenericTreeNode) => {
+    if (!node) return;
+    const yesno = await vscode.window.showQuickPick(['Yes', 'No'], {
+      placeHolder: `Remove item ${node.data.label}?`
+    });
+    if (yesno !== 'Yes') return;
+
+    await this.shell.executeUserCommand(node.providerId, 'removeItem', {
+      itemId: node.data.id,
+      parentId: node.parent?.id  // if you have access to the parent's ID
+    });
+    await this.refresh();
+  });
+
+  yield vscode.commands.registerCommand('genericTree.editItem', async (node?: GenericTreeNode) => {
+    if (!node) return;
+    const newLabel = await vscode.window.showInputBox({
+      prompt: `Rename item ${node.data.label} to:`
+    });
+    if (!newLabel) return;
+
+    await this.shell.executeUserCommand(node.providerId, 'editItem', {
+      itemId: node.data.id,
+      newLabel
+    });
+    await this.refresh();
+  });
+
+  yield vscode.commands.registerCommand('genericTree.runSpecialLogic', async (node?: GenericTreeNode) => {
+    if (!node) return;
+    const result = await this.shell.executeUserCommand(node.providerId, 'runSpecialLogic', {});
+    vscode.window.showInformationMessage(`Special logic result: ${JSON.stringify(result)}`);
+  });
+}
+

@@ -153,3 +153,128 @@ class GenericUserTreeService(BaseRpcService):
             return {"success": True, "message": f"Child '{label}' added."}
         # else ...
         return {"success": True, "message": f"Command {command_name} not specifically handled."}
+
+    def handle_executeUserCommand(self, provider_id: str, command_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    logger.info(f"executeUserCommand for provider={provider_id}, command={command_name}, args={args}")
+
+    # If the provider is special, like "bookmarks," do the old logic...
+    # Then handle generic providers:
+    if command_name == 'createItem':
+        return self._create_item(provider_id, args)
+    elif command_name == 'removeItem':
+        return self._remove_item(provider_id, args)
+    elif command_name == 'editItem':
+        return self._edit_item(provider_id, args)
+    elif command_name == 'runSpecialLogic':
+        return self._run_special_logic(provider_id, args)
+
+    # Fallback
+    return {"success": True, "message": f"Command {command_name} not specifically handled."}
+
+
+def _create_item(self, provider_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Creates a sub-item under a parent in /vscode/generic_dir/<provider_id>.
+    """
+    parent_id = args.get("parentId")
+    label = args.get("label", "New Item")
+    item_type = args.get("type", "GenericType")
+    # Possibly store a timestamp or other domain fields
+    timestamp = sandra.time.now()  # hypothetical if you have a time module
+    
+    new_path = f"{self.generic_dir}/{provider_id}/{label.replace(' ', '_')}"
+    new_obj = self.db.read_or_new('Container', new_path, contents={
+        "id": label,
+        "label": label,
+        "type": item_type,
+        "hasChildren": False,
+        "childPaths": [],
+        "createdAt": str(timestamp),
+    })
+    new_obj.write()
+
+    # If this item is going under a parent:
+    if parent_id:
+        parent_path = f"{self.generic_dir}/{provider_id}/{parent_id}"
+        parent_obj = self.db.readobj(parent_path)
+        if parent_obj:
+            pc = parent_obj.contents
+            child_list = pc.get("childPaths", [])
+            child_list.append(new_path)
+            pc["childPaths"] = child_list
+            # ensure parent hasChildren = True
+            pc["hasChildren"] = True
+            parent_obj.write()
+
+    return {"success": True, "message": f"Item '{label}' created."}
+
+
+def _remove_item(self, provider_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove an item from Sandra, also removing references in its parent's childPaths.
+    """
+    item_id = args.get("itemId")
+    parent_id = args.get("parentId")
+    if not item_id:
+        return {"success": False, "error": "No itemId provided."}
+
+    item_path = f"{self.generic_dir}/{provider_id}/{item_id}"
+    obj = self.db.readobj(item_path)
+    if obj:
+        obj.delete()
+
+    # If we know the parent, remove from parent's childPaths
+    if parent_id:
+        parent_path = f"{self.generic_dir}/{provider_id}/{parent_id}"
+        parent_obj = self.db.readobj(parent_path)
+        if parent_obj:
+            pc = parent_obj.contents
+            child_list = pc.get("childPaths", [])
+            if item_path in child_list:
+                child_list.remove(item_path)
+                pc["childPaths"] = child_list
+                # if that was the last child, optionally set hasChildren = False
+                if len(child_list) == 0:
+                    pc["hasChildren"] = False
+                parent_obj.write()
+
+    return {"success": True, "message": f"Removed item {item_id}"}
+
+
+def _edit_item(self, provider_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Edits some metadata in obj.contents. 
+    For example, rename the label or set some domain-specific fields.
+    """
+    item_id = args.get("itemId")
+    new_label = args.get("newLabel")
+    new_type = args.get("newType")
+    if not item_id:
+        return {"success": False, "error": "No itemId provided."}
+
+    item_path = f"{self.generic_dir}/{provider_id}/{item_id}"
+    obj = self.db.readobj(item_path)
+    if not obj:
+        return {"success": False, "error": f"Item {item_id} not found."}
+
+    contents = obj.contents
+    if new_label:
+        contents["label"] = new_label
+    if new_type:
+        contents["type"] = new_type
+    obj.write()
+
+    return {"success": True, "message": f"Edited item {item_id}"}
+
+
+def _run_special_logic(self, provider_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Example of domain logic. Maybe we do an index search, or a special operation on the entire provider.
+    """
+    # You can do something advanced here, e.g. scanning all child objects
+    base_path = f"{self.generic_dir}/{provider_id}"
+    # For demonstration, let's just count objects:
+    count = 0
+    for path in sandra.walk(base_path, db=self.db, returnDirs=False):
+        count += 1
+    return {"success": True, "info": f"Provider {provider_id} has {count} items total."}

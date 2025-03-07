@@ -164,3 +164,66 @@ public *register(): Generator<vscode.Disposable> {
   });
 }
 
+
+
+private async renameProviderCommand(nodeOrProvider?: ProviderNode) {
+  // 1) If the user right-clicked on a provider node
+  let providerId: string | undefined;
+  let oldDisplayName: string | undefined;
+
+  if (nodeOrProvider) {
+    // The node is passed via context menu
+    providerId = nodeOrProvider.providerId;
+    oldDisplayName = nodeOrProvider.displayName;
+  } else {
+    // 2) Otherwise, invoked from palette, so fallback to quick pick
+    const providers = await this.shell.listProviders();
+    if (!providers.length) {
+      vscode.window.showErrorMessage("No providers available to rename. Register a provider first.");
+      return;
+    }
+
+    // Convert provider objects -> string array for your simpleCreateQuickPick
+    const mapped = providers.map(p => ({
+      displayString: p.displayName,
+      actualId: p.id
+    }));
+
+    const pickedDisplayString = await simpleCreateQuickPick<string>({
+      title: "Pick a provider to rename",
+      choices: mapped.map(m => m.displayString),
+      errorMessage: "Failed to select provider.",
+      allowUserChoice: false,
+      currentSelection: ""
+    });
+    if (!pickedDisplayString) return;
+
+    const found = mapped.find(m => m.displayString === pickedDisplayString);
+    if (!found) return;
+
+    providerId = found.actualId;
+    oldDisplayName = found.displayString;
+  }
+
+  if (!providerId) {
+    vscode.window.showWarningMessage("No provider ID found to rename.");
+    return;
+  }
+
+  // 3) Prompt for new name
+  const newName = await vscode.window.showInputBox({
+    prompt: `Rename provider '${oldDisplayName ?? providerId}'`,
+    value: oldDisplayName ?? providerId
+  });
+  if (!newName) return; // user canceled
+
+  // 4) Actually rename via shell
+  try {
+    await this.shell.updateProviderDisplayName(providerId, newName);
+    await this.refresh();
+    vscode.window.showInformationMessage(`Renamed provider '${oldDisplayName}' to '${newName}'`);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Error renaming provider: ${String(error)}`);
+  }
+}
+

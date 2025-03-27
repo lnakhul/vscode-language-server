@@ -1,78 +1,172 @@
-class UserTreeManager:
-    def __init__(self, db: sandra.Sandra):
-        self.db = db
-        self.providers: Dict[str, Type[UserDefinedTree]] = {}
-        self.current_provider: Optional[UserDefinedTree] = None
-        self.user_modified_modules: set[str] = set()
+import * as vscode from 'vscode';
+import { UserProviderTreeDataProvider, ProviderNode, UserProviderTreeNode } from '../userProviderTree';
+import { QuartzShellProvider } from '../quartzShell';
+import { QuartzShellCollection } from '../quartzShellCollection';
+import { QuartzExtensionSettings } from '../quartzExtensionSettings';
+import { MockProxyManager } from './mocks/proxyManager';
+import { MockInstanceStore } from './utils';
+import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 
-        # Load providers from Sandra database
-        self.load_providers()
+jest.mock('../../logging');
 
-    def load_providers(self):
-        try:
-            container = self.db.readobj('/config/shell/vscode/trees')
-            if container:
-                for provider_id, provider_info in container.items():
-                    module_name = provider_info['module']
-                    class_name = provider_info['className']
-                    display_name = provider_info.get('displayName', provider_id)
-                    self._import_and_register(provider_id, module_name, class_name, display_name)
-        except Exception as e:
-            logger.error(f"Failed to load providers from Sandra: {e}")
+const mockProviders = [
+    { id: 'provider1', displayName: 'Provider 1' },
+    { id: 'provider2', displayName: 'Provider 2' }
+];
 
-    def _import_and_register(self, provider_id: str, module_name: str, class_name: str, display_name: str):
-        try:
-            mod = importlib.import_module(module_name)
-            cls = getattr(mod, class_name)
-            self.register_provider(provider_id, cls, display_name)
-        except (ImportError, AttributeError) as e:
-            logger.error(f"Failed to import {module_name}.{class_name}: {e}")
+const mockRootItems = [
+    { id: 'root1', label: 'Root 1', hasChildren: true },
+    { id: 'root2', label: 'Root 2', hasChildren: false }
+];
 
-    def register_provider(self, name: str, provider: Type[UserDefinedTree], display_name: str) -> None:
-        self.providers[name] = provider
-        logger.info(f"Registered provider: {name}")
+const mockChildItems = [
+    { id: 'child1', label: 'Child 1', hasChildren: false },
+    { id: 'child2', label: 'Child 2', hasChildren: true }
+];
 
-    def unregister_provider(self, name: str) -> None:
-        if name in self.providers:
-            del self.providers[name]
-            logger.info(f"Unregistered provider: {name}")
+let shellProvider: QuartzShellProvider;
+let shellCollection: QuartzShellCollection;
+let settings: QuartzExtensionSettings;
+let dataProvider: UserProviderTreeDataProvider;
+const mockedInstances = new MockInstanceStore();
 
-    def get_registered_providers(self) -> List[str]:
-        return list(self.providers.keys())
+describe('UserProviderTreeDataProvider Test Suite', () => {
+    beforeEach(() => {
+        shellCollection = new QuartzShellCollection();
+        shellProvider = new QuartzShellProvider(shellCollection);
+        settings = new QuartzExtensionSettings();
+        dataProvider = new UserProviderTreeDataProvider(shellProvider, settings);
 
-    def switch_provider(self, name: str) -> None:
-        if name in self.providers:
-            self.current_provider = self.providers[name]()
-            logger.info(f"Switched to provider: {name}")
-            if hasattr(self.current_provider, 'on_switch_away'):
-                self.current_provider.on_switch_away()
-        else:
-            logger.error(f"Provider {name} not found")
+        jest.spyOn(shellProvider, 'listTreeProviders').mockResolvedValue(mockProviders);
+        jest.spyOn(dataProvider, 'getRootItems').mockResolvedValue(mockRootItems);
+        jest.spyOn(dataProvider, 'getChildItems').mockResolvedValue(mockChildItems);
+    });
 
-    def list_providers(self) -> List[Dict[str, str]]:
-        results = []
-        for pid, info in self.providers.items():
-            results.append({"id": pid, "displayName": info.__name__})
-        return results
+    afterEach(() => {
+        mockedInstances.restore();
+        jest.clearAllMocks();
+    });
 
-    def get_children(self, provider_id: str, root_item: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        if provider_id not in self.providers:
-            return []
-        inst = self.providers[provider_id]()
-        if root_item is None:
-            return inst.get_root_nodes()
-        return inst.get_child_nodes(root_item['id'])
+    describe('listTreeProviders', () => {
+        test('should fetch and return a list of providers', async () => {
+            const providers = await dataProvider.listTreeProviders();
+            expect(providers).toEqual(mockProviders);
+        });
 
-    def start_session(self):
-        logger.info("Starting user tree session")
-        # Implement any necessary initialization for the session
+        test('should handle empty provider list', async () => {
+            jest.spyOn(shellProvider, 'listTreeProviders').mockResolvedValue([]);
+            const providers = await dataProvider.listTreeProviders();
+            expect(providers).toEqual([]);
+        });
+    });
 
-    def finish_session(self):
-        logger.info("Finishing user tree session")
-        # Implement any necessary cleanup for the session
+    describe('getRootItems', () => {
+        test('should fetch and return root items for a provider', async () => {
+            const rootItems = await dataProvider.getRootItems('provider1');
+            expect(rootItems).toEqual(mockRootItems);
+        });
 
-    def switch_away(self):
-        logger.info("Switching away from current user tree provider")
-        if self.current_provider and hasattr(self.current_provider, 'on_switch_away'):
-            self.current_provider.on_switch_away()
-        self.current_provider = None
+        test('should handle empty root items', async () => {
+            jest.spyOn(dataProvider, 'getRootItems').mockResolvedValue([]);
+            const rootItems = await dataProvider.getRootItems('provider1');
+            expect(rootItems).toEqual([]);
+        });
+    });
+
+    describe('getChildItems', () => {
+        test('should fetch and return child items for a parent node', async () => {
+            const childItems = await dataProvider.getChildItems('provider1', { id: 'root1', hasChildren: true });
+            expect(childItems).toEqual(mockChildItems);
+        });
+
+        test('should handle empty child items', async () => {
+            jest.spyOn(dataProvider, 'getChildItems').mockResolvedValue([]);
+            const childItems = await dataProvider.getChildItems('provider1', { id: 'root1', hasChildren: true });
+            expect(childItems).toEqual([]);
+        });
+    });
+
+    describe('getChildren', () => {
+        test('should return provider nodes at the top level', async () => {
+            const children = await dataProvider.getChildren();
+            expect(children).toHaveLength(mockProviders.length);
+            expect(children[0]).toBeInstanceOf(ProviderNode);
+            expect(children[0].providerId).toBe('provider1');
+        });
+
+        test('should return root items for a provider node', async () => {
+            const providerNode = new ProviderNode('provider1', 'Provider 1', dataProvider);
+            const children = await dataProvider.getChildren(providerNode);
+            expect(children).toHaveLength(mockRootItems.length);
+            expect(children[0]).toBeInstanceOf(UserProviderTreeNode);
+            expect(children[0].data.id).toBe('root1');
+        });
+
+        test('should return child items for a user provider tree node', async () => {
+            const parentNode = new UserProviderTreeNode(
+                { id: 'root1', label: 'Root 1', hasChildren: true },
+                'provider1',
+                dataProvider
+            );
+            const children = await dataProvider.getChildren(parentNode);
+            expect(children).toHaveLength(mockChildItems.length);
+            expect(children[0]).toBeInstanceOf(UserProviderTreeNode);
+            expect(children[0].data.id).toBe('child1');
+        });
+
+        test('should return an empty array for a leaf node', async () => {
+            const leafNode = new UserProviderTreeNode(
+                { id: 'child1', label: 'Child 1', hasChildren: false },
+                'provider1',
+                dataProvider
+            );
+            const children = await dataProvider.getChildren(leafNode);
+            expect(children).toEqual([]);
+        });
+    });
+
+    describe('refresh', () => {
+        test('should refresh the tree and fetch providers', async () => {
+            const fireSpy = jest.spyOn(dataProvider['_onDidChangeTreeData'], 'fire');
+            await dataProvider.refresh();
+            expect(fireSpy).toHaveBeenCalledWith(undefined);
+            expect(dataProvider['_rootNodes']).toHaveLength(mockProviders.length);
+        });
+
+        test('should handle errors during refresh', async () => {
+            jest.spyOn(dataProvider, 'listTreeProviders').mockRejectedValue(new Error('Test Error'));
+            const fireSpy = jest.spyOn(dataProvider['_onDidChangeTreeData'], 'fire');
+            await expect(dataProvider.refresh()).resolves.toBeUndefined();
+            expect(fireSpy).toHaveBeenCalledWith(undefined);
+            expect(dataProvider['_rootNodes']).toHaveLength(0);
+        });
+    });
+
+    describe('getTreeItem', () => {
+        test('should return a tree item for a provider node', async () => {
+            const providerNode = new ProviderNode('provider1', 'Provider 1', dataProvider);
+            const treeItem = await dataProvider.getTreeItem(providerNode);
+            expect(treeItem.label).toBe('Provider 1');
+            expect(treeItem.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+        });
+
+        test('should return a tree item for a user provider tree node', async () => {
+            const userNode = new UserProviderTreeNode(
+                { id: 'root1', label: 'Root 1', hasChildren: true },
+                'provider1',
+                dataProvider
+            );
+            const treeItem = await dataProvider.getTreeItem(userNode);
+            expect(treeItem.label).toBe('root1');
+            expect(treeItem.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+        });
+    });
+
+    describe('dispose', () => {
+        test('should dispose resources', () => {
+            const disposeSpy = jest.spyOn(dataProvider['trash'], 'dispose');
+            dataProvider.dispose();
+            expect(disposeSpy).toHaveBeenCalled();
+        });
+    });
+});

@@ -170,3 +170,35 @@ describe('UserProviderTreeDataProvider Test Suite', () => {
         });
     });
 });
+
+
+
+==================================
+
+
+test('should extract errors and tracebacks correctly', async () => {
+    const logContent = `
+2025-04-01 13:15:19,829 (31756) vscode.control_channel INFO - Starting process
+2025-04-01 13:15:19,829 (31756) vscode.control_channel ERROR - Unhandled exception processing message from extension: {'request': 'startUserTreeSession'}
+    File "c:\\Users\\zkpbx1j\\Desktop\\quartz_vscode_extension\\python\\vscode\\control_channel.py", line 58, in onMessage
+        res = handler(message)
+    File "c:\\Users\\zkpbx1j\\Desktop\\quartz_vscode_extension\\python\\vscode\\qzshell_protocol.py", line 307, in on_startUserTreeSession
+        _user_tree_service.load_providers()
+ModuleNotFoundError: No module named 'example_user_tree'
+
+2025-03-31 10:40:36,364 (9156) vscode.rpc_service.inform ERROR - Failed to process inform update: <qz.inform.client.writePartInformMessage object at 0x800000003384C880>
+Traceback (most recent call last):
+    File "c:\\example\\file.py", line 10, in <module>
+        raise ValueError("Example exception")
+ValueError: Example exception
+    `;
+    const logFiles = [{ name: 'test', ts: 1234, path: '/test/a' }];
+    mockedInstances.spyOn(vscode.workspace.fs, 'readFile').mockResolvedValue(Buffer.from(logContent));
+
+    const errorDetails = await logHelper.extractErrorDetails(logFiles);
+
+    expect(errorDetails).toContain('ERROR - Unhandled exception processing message from extension');
+    expect(errorDetails).toContain('ModuleNotFoundError: No module named \'example_user_tree\'');
+    expect(errorDetails).toContain('Traceback (most recent call last):');
+    expect(errorDetails).toContain('ValueError: Example exception');
+});

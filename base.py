@@ -125,3 +125,38 @@ class TreeProviderRegistry:
         if provider_id in self.default_providers:
             raise ValueError(f"Cannot unregister default provider '{provider_id}'.")
         self.user_providers.pop(provider_id, None)
+
+
+============================
+
+from .tree_provider_registry import TreeProviderRegistry
+
+class ShellControlChannelProtocol(ControlChannelProtocol):
+    def on_startUserTreeSession(self, message: ShellMessage):
+        registry = TreeProviderRegistry.get_instance()
+        providers = registry.list_providers()
+        self.sendEvent('startUserTreeSessionDone', {'providers': providers})
+
+    def on_listTreeProviders(self, message: ShellMessage):
+        registry = TreeProviderRegistry.get_instance()
+        providers = registry.list_providers()
+        self.sendEvent('listTreeProvidersResult', {'providers': providers})
+
+    def on_getRootItems(self, message: ShellMessage):
+        registry = TreeProviderRegistry.get_instance()
+        provider_id = message.get('provider_id')
+        provider = registry.get_provider(provider_id)
+        if provider:
+            instance = provider["instance"]
+            items = instance.get_children(None)
+            self.sendEvent('getRootItemsResult', {'items': items})
+
+    def on_getChildItems(self, message: ShellMessage):
+        registry = TreeProviderRegistry.get_instance()
+        provider_id = message.get('provider_id')
+        child = message.get('child', None)
+        provider = registry.get_provider(provider_id)
+        if provider:
+            instance = provider["instance"]
+            items = instance.get_children(child)
+            self.sendEvent('getChildItemsResult', {'items': items})

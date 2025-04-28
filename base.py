@@ -160,3 +160,30 @@ class ShellControlChannelProtocol(ControlChannelProtocol):
             instance = provider["instance"]
             items = instance.get_children(child)
             self.sendEvent('getChildItemsResult', {'items': items})
+
+
+
+
+
+
+def handle_uploadKeybindings(self, content: str) -> bool:
+    """Uploads the keybindings.json file to Sandra DB."""
+    try:
+        keybindings_path = f"{self.keybindings_dir}/keybindings.json"
+        obj = self.db.read_or_new('Container', keybindings_path, contents=content)
+        
+        # Check for concurrent modification
+        current_version = obj.meta.version
+        obj.contents = content
+        obj.write(prev_xact_id=current_version)  # Use the current version to ensure no conflicts
+        return True
+    except sandra.ConcurrentModificationSandraError:
+        logger.warning(f"Concurrent modification detected for {keybindings_path}. Retrying...")
+        # Retry logic: Read the latest version and update again
+        obj = self.db.readobj(keybindings_path)
+        obj.contents = content
+        obj.write(prev_xact_id=obj.meta.version)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to upload keybindings: {str(e)}")
+        return False

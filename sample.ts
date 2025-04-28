@@ -33,6 +33,8 @@ export class QuartzShell {
      */
     public async getRootItems(providerId: string): Promise<GenericTreeItemData[]> {
         return (await this.proxy.sendRequest<GenericTreeItemData[]>(
+
+
             'generic:getRootItems', 
             providerId
         )) || [];
@@ -319,3 +321,18 @@ export function deactivate() {}
     }
   }
 }
+
+
+========================private resolveKeybindingsPath(): vscode.Uri {
+    // 1) Portable DevTools: sibling of resources/app
+    const appRoot = vscode.env.appRoot; 
+    const portableKey = path.resolve(appRoot, '..', '..', 'data', 'user-data', 'User', 'keybindings.json');
+    if (fs.existsSync(portableKey)) {
+      return vscode.Uri.file(portableKey);
+    }
+
+    // 2) Standard Windows install under %APPDATA%\Code\User
+    const appData = process.env['APPDATA'] || path.join(os.homedir(), 'AppData', 'Roaming');
+    const normalKey = path.join(appData, 'Code', 'User', 'keybindings.json');
+    return vscode.Uri.file(normalKey);
+  }

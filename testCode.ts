@@ -1,204 +1,131 @@
 import * as vscode from 'vscode';
-import { UserProviderTreeDataProvider, ProviderNode, UserProviderTreeNode } from '../userProviderTree';
-import { QuartzShellProvider } from '../quartzShell';
-import { QuartzShellCollection } from '../quartzShellCollection';
-import { QuartzExtensionSettings } from '../quartzExtensionSettings';
+import * as fs from 'fs';
+import * as path from 'path';
+import { DotDirsSync } from '../dotDirsSync';
 import { MockProxyManager } from './mocks/proxyManager';
-import { MockInstanceStore } from './utils';
 import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
 
-jest.mock('../../logging');
+jest.mock('fs', () => ({
+    promises: {
+        readFile: jest.fn(),
+        writeFile: jest.fn(),
+        mkdir: jest.fn(),
+        readdir: jest.fn(),
+    },
+    existsSync: jest.fn(),
+}));
 
-const mockProviders = [
-    { id: 'provider1', displayName: 'Provider 1' },
-    { id: 'provider2', displayName: 'Provider 2' }
-];
+jest.mock('vscode', () => ({
+    ...jest.requireActual('vscode'),
+    workspace: {
+        workspaceFolders: [{ uri: { fsPath: '/mock/workspace' } }],
+        onDidSaveTextDocument: jest.fn(),
+    },
+    window: {
+        showInformationMessage: jest.fn(),
+        showErrorMessage: jest.fn(),
+    },
+}));
 
-const mockRootItems = [
-    { id: 'root1', label: 'Root 1', hasChildren: true },
-    { id: 'root2', label: 'Root 2', hasChildren: false }
-];
+describe('DotDirsSync Test Suite', () => {
+    let dotDirsSync: DotDirsSync;
+    let proxyManager: MockProxyManager;
 
-const mockChildItems = [
-    { id: 'child1', label: 'Child 1', hasChildren: false },
-    { id: 'child2', label: 'Child 2', hasChildren: true }
-];
-
-let shellProvider: QuartzShellProvider;
-let shellCollection: QuartzShellCollection;
-let settings: QuartzExtensionSettings;
-let dataProvider: UserProviderTreeDataProvider;
-const mockedInstances = new MockInstanceStore();
-
-describe('UserProviderTreeDataProvider Test Suite', () => {
     beforeEach(() => {
-        shellCollection = new QuartzShellCollection();
-        shellProvider = new QuartzShellProvider(shellCollection);
-        settings = new QuartzExtensionSettings();
-        dataProvider = new UserProviderTreeDataProvider(shellProvider, settings);
-
-        jest.spyOn(shellProvider, 'listTreeProviders').mockResolvedValue(mockProviders);
-        jest.spyOn(dataProvider, 'getRootItems').mockResolvedValue(mockRootItems);
-        jest.spyOn(dataProvider, 'getChildItems').mockResolvedValue(mockChildItems);
+        proxyManager = new MockProxyManager();
+        dotDirsSync = new DotDirsSync(proxyManager);
     });
 
     afterEach(() => {
-        mockedInstances.restore();
         jest.clearAllMocks();
     });
 
-    describe('listTreeProviders', () => {
-        test('should fetch and return a list of providers', async () => {
-            const providers = await dataProvider.listTreeProviders();
-            expect(providers).toEqual(mockProviders);
+    describe('uploadDotDirs', () => {
+        test('should upload keybindings.json if it exists', async () => {
+            (fs.existsSync as jest.Mock).mockReturnValue(true);
+            (fs.promises.readFile as jest.Mock).mockResolvedValue('mock-content');
+            const writeConfigFileSpy = jest.spyOn(dotDirsSync, 'writeConfigFile');
+
+            await dotDirsSync['uploadDotDirs']();
+
+            expect(writeConfigFileSpy).toHaveBeenCalledWith('.vscode/keybindings.json', 'mock-content');
         });
 
-        test('should handle empty provider list', async () => {
-            jest.spyOn(shellProvider, 'listTreeProviders').mockResolvedValue([]);
-            const providers = await dataProvider.listTreeProviders();
-            expect(providers).toEqual([]);
-        });
-    });
+        test('should upload dot-prefixed folders', async () => {
+            (fs.promises.readdir as jest.Mock).mockResolvedValue([
+                { name: '.vscode', isDirectory: () => true },
+                { name: '.git', isDirectory: () => true },
+            ]);
+            const uploadFolderSpy = jest.spyOn(dotDirsSync as any, 'uploadFolder').mockResolvedValue();
 
-    describe('getRootItems', () => {
-        test('should fetch and return root items for a provider', async () => {
-            const rootItems = await dataProvider.getRootItems('provider1');
-            expect(rootItems).toEqual(mockRootItems);
-        });
+            await dotDirsSync['uploadDotDirs']();
 
-        test('should handle empty root items', async () => {
-            jest.spyOn(dataProvider, 'getRootItems').mockResolvedValue([]);
-            const rootItems = await dataProvider.getRootItems('provider1');
-            expect(rootItems).toEqual([]);
-        });
-    });
-
-    describe('getChildItems', () => {
-        test('should fetch and return child items for a parent node', async () => {
-            const childItems = await dataProvider.getChildItems('provider1', { id: 'root1', hasChildren: true });
-            expect(childItems).toEqual(mockChildItems);
-        });
-
-        test('should handle empty child items', async () => {
-            jest.spyOn(dataProvider, 'getChildItems').mockResolvedValue([]);
-            const childItems = await dataProvider.getChildItems('provider1', { id: 'root1', hasChildren: true });
-            expect(childItems).toEqual([]);
+            expect(uploadFolderSpy).toHaveBeenCalledWith('.vscode', '/mock/workspace/.vscode');
+            expect(uploadFolderSpy).toHaveBeenCalledWith('.git', '/mock/workspace/.git');
         });
     });
 
-    describe('getChildren', () => {
-        test('should return provider nodes at the top level', async () => {
-            const children = await dataProvider.getChildren();
-            expect(children).toHaveLength(mockProviders.length);
-            expect(children[0]).toBeInstanceOf(ProviderNode);
-            expect(children[0].providerId).toBe('provider1');
-        });
+    describe('downloadDotDirs', () => {
+        test('should download keybindings.json from Sandra', async () => {
+            jest.spyOn(dotDirsSync, 'listDotDirs').mockResolvedValue(['.vscode']);
+            jest.spyOn(dotDirsSync, 'listConfigFiles').mockResolvedValue(['keybindings.json']);
+            jest.spyOn(dotDirsSync, 'readConfigFile').mockResolvedValue('mock-content');
+            const writeFileContentSpy = jest.spyOn(fs.promises, 'writeFile');
 
-        test('should return root items for a provider node', async () => {
-            const providerNode = new ProviderNode('provider1', 'Provider 1', dataProvider);
-            const children = await dataProvider.getChildren(providerNode);
-            expect(children).toHaveLength(mockRootItems.length);
-            expect(children[0]).toBeInstanceOf(UserProviderTreeNode);
-            expect(children[0].data.id).toBe('root1');
-        });
+            await dotDirsSync['downloadDotDirs']();
 
-        test('should return child items for a user provider tree node', async () => {
-            const parentNode = new UserProviderTreeNode(
-                { id: 'root1', label: 'Root 1', hasChildren: true },
-                'provider1',
-                dataProvider
+            expect(writeFileContentSpy).toHaveBeenCalledWith(
+                expect.stringContaining('keybindings.json'),
+                'mock-content'
             );
-            const children = await dataProvider.getChildren(parentNode);
-            expect(children).toHaveLength(mockChildItems.length);
-            expect(children[0]).toBeInstanceOf(UserProviderTreeNode);
-            expect(children[0].data.id).toBe('child1');
         });
 
-        test('should return an empty array for a leaf node', async () => {
-            const leafNode = new UserProviderTreeNode(
-                { id: 'child1', label: 'Child 1', hasChildren: false },
-                'provider1',
-                dataProvider
+        test('should download other dot-prefixed folders', async () => {
+            jest.spyOn(dotDirsSync, 'listDotDirs').mockResolvedValue(['.git']);
+            jest.spyOn(dotDirsSync, 'listConfigFiles').mockResolvedValue(['config']);
+            jest.spyOn(dotDirsSync, 'readConfigFile').mockResolvedValue('mock-content');
+            const writeFileContentSpy = jest.spyOn(fs.promises, 'writeFile');
+
+            await dotDirsSync['downloadDotDirs']();
+
+            expect(writeFileContentSpy).toHaveBeenCalledWith(
+                expect.stringContaining('/mock/workspace/.git/config'),
+                'mock-content'
             );
-            const children = await dataProvider.getChildren(leafNode);
-            expect(children).toEqual([]);
         });
     });
 
-    describe('refresh', () => {
-        test('should refresh the tree and fetch providers', async () => {
-            const fireSpy = jest.spyOn(dataProvider['_onDidChangeTreeData'], 'fire');
-            await dataProvider.refresh();
-            expect(fireSpy).toHaveBeenCalledWith(undefined);
-            expect(dataProvider['_rootNodes']).toHaveLength(mockProviders.length);
+    describe('handleTextDocumentSave', () => {
+        test('should upload keybindings.json on save', async () => {
+            const mockDoc = { uri: { fsPath: '/mock/keybindings.json' }, getText: jest.fn().mockReturnValue('mock-content') } as any;
+            jest.spyOn(dotDirsSync, 'writeConfigFile').mockResolvedValue();
+            jest.spyOn(dotDirsSync, 'keybindingsPath', 'get').mockReturnValue(vscode.Uri.file('/mock/keybindings.json'));
+
+            await dotDirsSync['handleTextDocumentSave'](mockDoc);
+
+            expect(dotDirsSync['writeConfigFile']).toHaveBeenCalledWith('.vscode/keybindings.json', 'mock-content');
         });
 
-        test('should handle errors during refresh', async () => {
-            jest.spyOn(dataProvider, 'listTreeProviders').mockRejectedValue(new Error('Test Error'));
-            const fireSpy = jest.spyOn(dataProvider['_onDidChangeTreeData'], 'fire');
-            await expect(dataProvider.refresh()).resolves.toBeUndefined();
-            expect(fireSpy).toHaveBeenCalledWith(undefined);
-            expect(dataProvider['_rootNodes']).toHaveLength(0);
-        });
-    });
+        test('should not upload non-keybindings.json files', async () => {
+            const mockDoc = { uri: { fsPath: '/mock/other-file.json' }, getText: jest.fn() } as any;
+            const writeConfigFileSpy = jest.spyOn(dotDirsSync, 'writeConfigFile');
 
-    describe('getTreeItem', () => {
-        test('should return a tree item for a provider node', async () => {
-            const providerNode = new ProviderNode('provider1', 'Provider 1', dataProvider);
-            const treeItem = await dataProvider.getTreeItem(providerNode);
-            expect(treeItem.label).toBe('Provider 1');
-            expect(treeItem.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-        });
+            await dotDirsSync['handleTextDocumentSave'](mockDoc);
 
-        test('should return a tree item for a user provider tree node', async () => {
-            const userNode = new UserProviderTreeNode(
-                { id: 'root1', label: 'Root 1', hasChildren: true },
-                'provider1',
-                dataProvider
-            );
-            const treeItem = await dataProvider.getTreeItem(userNode);
-            expect(treeItem.label).toBe('root1');
-            expect(treeItem.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+            expect(writeConfigFileSpy).not.toHaveBeenCalled();
         });
     });
 
-    describe('dispose', () => {
-        test('should dispose resources', () => {
-            const disposeSpy = jest.spyOn(dataProvider['trash'], 'dispose');
-            dataProvider.dispose();
-            expect(disposeSpy).toHaveBeenCalled();
+    describe('syncAllDotDirs', () => {
+        test('should call uploadDotDirs and downloadDotDirs', async () => {
+            const uploadSpy = jest.spyOn(dotDirsSync as any, 'uploadDotDirs').mockResolvedValue();
+            const downloadSpy = jest.spyOn(dotDirsSync as any, 'downloadDotDirs').mockResolvedValue();
+
+            await dotDirsSync.syncAllDotDirs();
+
+            expect(uploadSpy).toHaveBeenCalled();
+            expect(downloadSpy).toHaveBeenCalled();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Dot-dirs sync complete.');
         });
     });
-});
-
-
-
-==================================
-
-
-test('should extract errors and tracebacks correctly', async () => {
-    const logContent = `
-2025-04-01 13:15:19,829 (31756) vscode.control_channel INFO - Starting process
-2025-04-01 13:15:19,829 (31756) vscode.control_channel ERROR - Unhandled exception processing message from extension: {'request': 'startUserTreeSession'}
-    File "c:\\Users\\zkpbx1j\\Desktop\\quartz_vscode_extension\\python\\vscode\\control_channel.py", line 58, in onMessage
-        res = handler(message)
-    File "c:\\Users\\zkpbx1j\\Desktop\\quartz_vscode_extension\\python\\vscode\\qzshell_protocol.py", line 307, in on_startUserTreeSession
-        _user_tree_service.load_providers()
-ModuleNotFoundError: No module named 'example_user_tree'
-
-2025-03-31 10:40:36,364 (9156) vscode.rpc_service.inform ERROR - Failed to process inform update: <qz.inform.client.writePartInformMessage object at 0x800000003384C880>
-Traceback (most recent call last):
-    File "c:\\example\\file.py", line 10, in <module>
-        raise ValueError("Example exception")
-ValueError: Example exception
-    `;
-    const logFiles = [{ name: 'test', ts: 1234, path: '/test/a' }];
-    mockedInstances.spyOn(vscode.workspace.fs, 'readFile').mockResolvedValue(Buffer.from(logContent));
-
-    const errorDetails = await logHelper.extractErrorDetails(logFiles);
-
-    expect(errorDetails).toContain('ERROR - Unhandled exception processing message from extension');
-    expect(errorDetails).toContain('ModuleNotFoundError: No module named \'example_user_tree\'');
-    expect(errorDetails).toContain('Traceback (most recent call last):');
-    expect(errorDetails).toContain('ValueError: Example exception');
 });

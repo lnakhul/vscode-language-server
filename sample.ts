@@ -1,39 +1,33 @@
-if (gridMenu) {
-      const sub = gridMenu.onColumnsChanged.subscribe((_e, data) => {
-        const visibleIds = data.columns.map(c => c.columnId);
-        const hiddenIds  = allColumnsRef.current
-          .map(c => String(c.id))
-          .filter(id => !visibleIds.includes(id));
+// ─────────────────────────────────────────────────────────────────────────────
+// outside of your component (either at the bottom of vcconsole.tsx or in a
+// shared/hooks.ts file), define:
 
-        setHiddenColumns(hiddenIds);
-        vsCodeApi.invoke('saveGridSettings', {
-          gridId: 'vcconsole',
-          settings: {
-            columnWidths: widthsRef.current,
-            hiddenColumns: hiddenIds
-          }
-        });
+import { useRef, useEffect, MutableRefObject } from 'react';
+import type { SlickGrid, Column } from 'slickgrid-react';
 
-        // immediately re-apply so menu greys out correctly
-        grid.setColumns(
-          allColumnsRef.current
-            .filter(col => !hiddenIds.includes(String(col.id)))
-            .map(col => ({ …col, width: widthsRef.current[col.id] ?? col.width }))
-        );
-      });
-      // clean up on unmount
-      grid.onBeforeDestroy.subscribe(() => sub.unsubscribe?.());
-    }
-  };
+export function useSyncedRef<T>(value: T): MutableRefObject<T> {
+  const ref = useRef<T>(value);
+  useEffect(() => { ref.current = value }, [value]);
+  return ref;
+}
 
-  // … other handlers …
-
-  // ➌ After your `displayColumns = useMemo(...)`, force any change back into the grid
+export function useGridColumnsApplier(
+  gridRef: MutableRefObject<SlickGrid | null>,
+  allColsRef: MutableRefObject<Column[]>,
+  columnWidths: Record<string,number>,
+  hiddenColumns: string[]
+) {
   useEffect(() => {
-    const grid = slickGridRef.current;
+    const grid = gridRef.current;
     if (!grid) return;
-    const visible = allColumnsRef.current
+    // derive only the visible, resized columns
+    const visible = allColsRef.current
       .filter(col => !hiddenColumns.includes(String(col.id)))
-      .map(col => ({ …col, width: columnWidths[col.id] ?? col.width }));
+      .map(col => ({
+        ...col,
+        width: columnWidths[col.id] ?? col.width
+      }));
     grid.setColumns(visible);
-  }, [columnWidths, hiddenColumns]);
+  }, [gridRef, allColsRef, columnWidths, hiddenColumns]);
+}
+// ─────────────────────────────────────────────────────────────────────────────

@@ -1,60 +1,39 @@
-async downloadKeybindings(): Promise<void> {
-    try {
-        const remoteKeybindings = await this.fetchRemoteKeybindings();
-        const localKeybindings = await this.readLocalKeybindings();
-        const mergedKeybindings = this.mergeKeybindings(localKeybindings, remoteKeybindings);
-        await this.writeKeybindingsToFile(mergedKeybindings);
-    } catch (error) {
-        console.error(`Failed to download keybindings: ${error}`);
-    }
-}
+if (gridMenu) {
+      const sub = gridMenu.onColumnsChanged.subscribe((_e, data) => {
+        const visibleIds = data.columns.map(c => c.columnId);
+        const hiddenIds  = allColumnsRef.current
+          .map(c => String(c.id))
+          .filter(id => !visibleIds.includes(id));
 
-private async fetchRemoteKeybindings(): Promise<any[]> {
-    const remoteText = await this.proxyManager.sendRequest<string>(
-        null,
-        'file:downloadKeybindings'
-    );
+        setHiddenColumns(hiddenIds);
+        vsCodeApi.invoke('saveGridSettings', {
+          gridId: 'vcconsole',
+          settings: {
+            columnWidths: widthsRef.current,
+            hiddenColumns: hiddenIds
+          }
+        });
 
-    try {
-        const remote = JSON.parse(remoteText);
-        if (!Array.isArray(remote)) throw new Error('Remote keybindings are not an array');
-        return remote;
-    } catch (e) {
-        throw new Error(`Downloaded keybindings.json is invalid JSON: ${e}`);
-    }
-}
-
-private async readLocalKeybindings(): Promise<any[]> {
-    try {
-        const localBytes = await vscode.workspace.fs.readFile(this.keybindingsPath);
-        const localText = Buffer.from(localBytes).toString('utf8');
-        const local = JSON.parse(localText);
-        if (!Array.isArray(local)) throw new Error('Local keybindings are not an array');
-        return local;
-    } catch {
-        // Missing file or parse error: start with an empty array
-        return [];
-    }
-}
-
-private mergeKeybindings(local: any[], remote: any[]): any[] {
-    const merged = [...local];
-    for (const entry of remote) {
-        const duplicate = merged.find(
-            x =>
-                x.key === entry.key &&
-                x.command === entry.command &&
-                x.when === entry.when
+        // immediately re-apply so menu greys out correctly
+        grid.setColumns(
+          allColumnsRef.current
+            .filter(col => !hiddenIds.includes(String(col.id)))
+            .map(col => ({ …col, width: widthsRef.current[col.id] ?? col.width }))
         );
-        if (!duplicate) merged.push(entry);
+      });
+      // clean up on unmount
+      grid.onBeforeDestroy.subscribe(() => sub.unsubscribe?.());
     }
-    return merged;
-}
+  };
 
-private async writeKeybindingsToFile(keybindings: any[]): Promise<void> {
-    const output = JSON.stringify(keybindings, null, 2);
-    await vscode.workspace.fs.writeFile(
-        this.keybindingsPath,
-        Buffer.from(output, 'utf8')
-    );
-}
+  // … other handlers …
+
+  // ➌ After your `displayColumns = useMemo(...)`, force any change back into the grid
+  useEffect(() => {
+    const grid = slickGridRef.current;
+    if (!grid) return;
+    const visible = allColumnsRef.current
+      .filter(col => !hiddenColumns.includes(String(col.id)))
+      .map(col => ({ …col, width: columnWidths[col.id] ?? col.width }));
+    grid.setColumns(visible);
+  }, [columnWidths, hiddenColumns]);

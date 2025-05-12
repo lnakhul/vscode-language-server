@@ -1,33 +1,53 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// outside of your component (either at the bottom of vcconsole.tsx or in a
-// shared/hooks.ts file), define:
+// hooks/useGridMenuPersistence.tsx
+import { useEffect } from "react";
+import type { SlickGrid } from "slickgrid-react";
 
-import { useRef, useEffect, MutableRefObject } from 'react';
-import type { SlickGrid, Column } from 'slickgrid-react';
-
-export function useSyncedRef<T>(value: T): MutableRefObject<T> {
-  const ref = useRef<T>(value);
-  useEffect(() => { ref.current = value }, [value]);
-  return ref;
-}
-
-export function useGridColumnsApplier(
-  gridRef: MutableRefObject<SlickGrid | null>,
-  allColsRef: MutableRefObject<Column[]>,
-  columnWidths: Record<string,number>,
-  hiddenColumns: string[]
+export function useGridMenuPersistence(
+  gridRef: React.MutableRefObject<SlickGrid | null>,
+  allColsRef: React.MutableRefObject<Column[]>,
+  widthsRef: React.MutableRefObject<Record<string,number>>,
+  hiddenColsRef: React.MutableRefObject<string[]>,
+  setHiddenColumns: React.Dispatch<React.SetStateAction<string[]>>,
+  vsCodeApi: VsCodeApi
 ) {
   useEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
-    // derive only the visible, resized columns
-    const visible = allColsRef.current
-      .filter(col => !hiddenColumns.includes(String(col.id)))
-      .map(col => ({
-        ...col,
-        width: columnWidths[col.id] ?? col.width
-      }));
-    grid.setColumns(visible);
-  }, [gridRef, allColsRef, columnWidths, hiddenColumns]);
+
+    const gridMenu = grid.getPluginByName("gridMenu") as any;
+    if (!gridMenu) return;
+
+    const sub = gridMenu.onColumnsChanged.subscribe((_e: any, data: any) => {
+      const visible = data.columns.map((c: any) => c.columnId);
+      const newHidden = allColsRef.current
+        .map(c => String(c.id))
+        .filter(id => !visible.includes(id));
+
+      setHiddenColumns(newHidden);
+      vsCodeApi.invoke("saveGridSettings", {
+        gridId: "vcconsole",
+        settings: {
+          columnWidths: widthsRef.current,
+          hiddenColumns: newHidden
+        }
+      });
+
+      const visibleDefs = allColsRef.current
+        .filter(col => !newHidden.includes(String(col.id)))
+        .map(col => ({
+          ...col,
+          width: widthsRef.current[col.id] ?? col.width
+        }));
+      grid.setColumns(visibleDefs);
+    });
+
+    return () => sub.unsubscribe?.();
+  }, [
+    gridRef,
+    allColsRef,
+    widthsRef,
+    hiddenColsRef,
+    setHiddenColumns,
+    vsCodeApi
+  ]);
 }
-// ─────────────────────────────────────────────────────────────────────────────

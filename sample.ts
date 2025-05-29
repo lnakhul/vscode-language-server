@@ -1,162 +1,107 @@
-// src/hooks/useVcConsoleGridHooks.ts
+import React from 'react';
+import './ReviewHeader.css'; // Or use styled-components
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { SlickGrid, Column } from 'slickgrid-react';
-import type { VsCodeApi } from '../components/VsCodeExtensionContext';
+const ReviewHeader = () => {
+  return (
+    <div className="review-header">
+      {/* Top Metadata */}
+      <div className="meta-row">
+        <div><strong>Review ID:</strong> #12345678</div>
+        <div><strong>State:</strong> OPEN</div>
+        <div><strong>Created:</strong> TIME</div>
+      </div>
 
-/**
- * Manages column widths and visibility state for VC Console.
- */
-export function useVcConsoleColumns(
-  vsCodeApi: VsCodeApi,
-  gridId: string
-) {
-  // State for widths and hidden columns
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+      {/* Title */}
+      <h2 className="review-title">Review XYZ</h2>
 
-  // Refs to hold latest values for callbacks
-  const allColumnsRef = useRef<Column[]>([]);
-  const widthsRef = useRef<Record<string, number>>(columnWidths);
-  const hiddenColsRef = useRef<string[]>(hiddenColumns);
+      {/* Repo / Branch / Author Info */}
+      <div className="info-row">
+        <div><strong>Repository:</strong> <span>repo-name</span></div>
+        <div><strong>Branch:</strong> <span>feature/mybranch</span></div>
+        <div><strong>Last Modified:</strong> <span className="badge">SUPERVISED</span></div>
+      </div>
+      <div className="info-row">
+        <div><strong>Author:</strong> <span>username</span></div>
+        <div><strong>Reviewer(s):</strong> <span>reviewer1, reviewer2</span></div>
+      </div>
 
-  // Sync state into refs
-  useEffect(() => { widthsRef.current = columnWidths; }, [columnWidths]);
-  useEffect(() => { hiddenColsRef.current = hiddenColumns; }, [hiddenColumns]);
+      {/* Summary Section */}
+      <div className="summary-section">
+        <strong>Summary / Description:</strong>
+        <div className="summary-box">
+          Fixes XYZ, refactored ABC.
+        </div>
+      </div>
 
-  // Load initial settings on mount
-  useEffect(() => {
-    let mounted = true;
-    vsCodeApi.invoke('loadGridSettings', { gridId })
-      .then((resp: any) => {
-        if (!mounted) return;
-        const { columnWidths: cw, hiddenColumns: hc } = resp.settings || {};
-        if (cw) setColumnWidths(cw);
-        if (hc) setHiddenColumns(hc);
-      })
-      .catch(console.error);
-    return () => { mounted = false; };
-  }, [vsCodeApi, gridId]);
-
-  /**
-   * Initialize grid with full definitions, applying saved widths & visibility.
-   */
-  const initializeColumns = useCallback(
-    (grid: SlickGrid, initialDefs: Column[]) => {
-      allColumnsRef.current = initialDefs;
-      const visible = allColumnsRef.current
-        .filter(col => !hiddenColsRef.current.includes(String(col.id)))
-        .map(col => ({ ...col, width: columnWidths[col.id] ?? col.width }));
-      grid.setColumns(visible);
-    },
-    [columnWidths]
+      {/* Action Buttons */}
+      <div className="actions-row">
+        <button className="btn approve">✔ Approve</button>
+        <button className="btn reject">✖ Reject</button>
+        <button className="btn comment">💬 Comment</button>
+        <span className="last-action">Last Action: <strong>xyz by user123</strong></span>
+      </div>
+    </div>
   );
+};
 
-  /**
-   * Handle column resize: persist widths + current hidden list, then reapply.
-   */
-  const handleResize = useCallback(
-    (grid: SlickGrid) => {
-      const cols = grid.getColumns();
-      const updated: Record<string, number> = {};
-      let changed = false;
-      cols.forEach(col => {
-        const w = col.width ?? col.minWidth ?? 0;
-        updated[col.id] = w;
-        if (Math.abs(w - (widthsRef.current[col.id] ?? 0)) > 1) {
-          changed = true;
-        }
-      });
-      if (!changed) return;
+export default ReviewHeader;
 
-      setColumnWidths(updated);
-      vsCodeApi.invoke('saveGridSettings', {
-        gridId,
-        settings: {
-          columnWidths: updated,
-          hiddenColumns: hiddenColsRef.current
-        }
-      });
 
-      const visible = allColumnsRef.current
-        .filter(col => !hiddenColsRef.current.includes(String(col.id)))
-        .map(col => ({ ...col, width: updated[col.id] ?? col.width }));
-      grid.setColumns(visible);
-    },
-    [vsCodeApi, gridId]
-  );
-
-  /**
-   * Columns to render: filter out hidden, apply saved widths.
-   */
-  const visibleColumns = useMemo(
-    () => allColumnsRef.current
-      .filter(col => !hiddenColumns.includes(String(col.id)))
-      .map(col => ({ ...col, width: columnWidths[col.id] ?? col.width })),
-    [columnWidths, hiddenColumns]
-  );
-
-  /**
-   * Preset columns format for SlickGrid options (columnId + width).
-   */
-  const presetColumns = useMemo(
-    () => allColumnsRef.current
-      .filter(col => !hiddenColumns.includes(String(col.id)))
-      .map(col => ({ columnId: String(col.id), width: columnWidths[col.id] ?? col.width })),
-    [columnWidths, hiddenColumns]
-  );
-
-  return {
-    visibleColumns,
-    presetColumns,
-    initializeColumns,
-    handleResize,
-    setHiddenColumns,
-    allColumnsRef,
-    widthsRef,
-    hiddenColsRef
-  };
+.review-header {
+  background-color: #1e1e2f;
+  color: #e0e0e0;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-family: sans-serif;
 }
 
-/**
- * Subscribes to GridMenu toggle events and persists visibility state.
- */
-export function useVcConsoleGridMenu(
-  gridRef: React.RefObject<SlickGrid>,
-  allColumnsRef: React.MutableRefObject<Column[]>,
-  widthsRef: React.MutableRefObject<Record<string, number>>,
-  hiddenColsRef: React.MutableRefObject<string[]>,
-  setHiddenColumns: React.Dispatch<React.SetStateAction<string[]>>,
-  vsCodeApi: VsCodeApi,
-  gridId: string
-) {
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-    const gridMenu = grid.getPluginByName('gridMenu') as any;
-    if (!gridMenu) return;
+.meta-row, .info-row, .actions-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 
-    const sub = gridMenu.onColumnsChanged.subscribe((_e: any, data: any) => {
-      const visibleIds = data.columns.map((c: any) => c.columnId);
-      const newHidden = allColumnsRef.current
-        .map(col => String(col.id))
-        .filter(id => !visibleIds.includes(id));
+.review-title {
+  margin: 10px 0;
+}
 
-      setHiddenColumns(newHidden);
-      vsCodeApi.invoke('saveGridSettings', {
-        gridId,
-        settings: {
-          columnWidths: widthsRef.current,
-          hiddenColumns: newHidden
-        }
-      });
+.summary-section {
+  margin-top: 1rem;
+}
 
-      const visible = allColumnsRef.current
-        .filter(col => !newHidden.includes(String(col.id)))
-        .map(col => ({ ...col, width: widthsRef.current[col.id] ?? col.width }));
-      grid.setColumns(visible);
-    });
+.summary-box {
+  background-color: #2a2a3c;
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 5px;
+}
 
-    return () => sub.unsubscribe?.();
-  }, [gridRef, allColumnsRef, widthsRef, hiddenColsRef, setHiddenColumns, vsCodeApi, gridId]);
+.badge {
+  background-color: #444;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #fff;
+}
+
+.btn {
+  background-color: #333;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.last-action {
+  margin-left: auto;
+  font-size: 0.9rem;
+  opacity: 0.7;
 }

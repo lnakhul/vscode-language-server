@@ -1,159 +1,183 @@
-import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import { DotDirsSync } from '../dotDirsSync';
-import { MockProxyManager } from './mocks/proxyManager';
-import { expect, jest, test, describe, beforeEach, afterEach } from '@jest/globals';
-import { Dirent } from 'fs';
+import { createElement, useMemo } from "react";
+import "@vscode-elements/elements/dist/vscode-checkbox";
+import "@vscode-elements/elements/dist/vscode-tree";
+import "@vscode-elements/elements/dist/vscode-tree-item";
+import FormLabel from "./FormLabel";
+import { SpinningIcon } from "./SpinningIcon";
+import styles from "../css/ApproversListView.module.css";
+import { createCopyLink as makeCopyLink, userToLink } from "../reactFunctions";
 
-jest.mock('fs', () => ({
-    promises: {
-        readFile: jest.fn(),
-        writeFile: jest.fn(),
-        mkdir: jest.fn(),
-        readdir: jest.fn(),
-    },
-    existsSync: jest.fn(),
-}));
-
-jest.mock('vscode', () => ({
-    ...jest.requireActual('vscode'),
-    workspace: {
-        workspaceFolders: [{ uri: { fsPath: '/mock/workspace' } }],
-        onDidSaveTextDocument: jest.fn(),
-    },
-    window: {
-        showInformationMessage: jest.fn(),
-        showErrorMessage: jest.fn(),
-    },
-}));
-
-interface MockDirent {
-    name: string;
-    parentPath: string;
-    path: string;
-    isDirectory: () => boolean;
-    isFile: () => boolean;
-    isBlockDevice: () => boolean;
-    isCharacterDevice: () => boolean;
-    isSymbolicLink: () => boolean;
-    isFIFO: () => boolean;
-    isSocket: () => boolean;
-}
-function createMockDirent(name: string, isDirectory: boolean, parentPath: string = '/mock/workspace'): MockDirent {
-    return {
-        name,
-        parentPath,
-        path: path.join(parentPath, name),
-        isDirectory: jest.fn(() => isDirectory),
-        isFile: jest.fn(() => !isDirectory),
-        isBlockDevice: jest.fn(() => false),
-        isCharacterDevice: jest.fn(() => false),
-        isSymbolicLink: jest.fn(() => false),
-        isFIFO: jest.fn(() => false),
-        isSocket: jest.fn(() => false),
-    };
+/** keep your command link helper */
+function commandLink(command: string, ...args: string[]) {
+  const encodedArgs =
+    args.length > 0 ? `?${encodeURIComponent(JSON.stringify(args))}` : "";
+  return `command:${command}${encodedArgs}`;
 }
 
-describe('DotDirsSync Test Suite', () => {
-    let dotDirsSync: DotDirsSync;
-    let proxyManager: MockProxyManager;
+/** keep your local copy helper, just reusing commandLink */
+function createCopyLink(label: string, text: string, tooltip: string) {
+  return createElement(
+    "a",
+    {
+      href: commandLink("quartz.internal.copyToClipboard", text),
+      title: tooltip,
+      onClick: (e: React.MouseEvent) => {
+        // let the command run, but don’t toggle selection/expansion
+        e.stopPropagation();
+      },
+    },
+    label
+  );
+}
 
-    beforeEach(() => {
-        proxyManager = new MockProxyManager();
-        dotDirsSync = new DotDirsSync(proxyManager);
-    });
+type PathApprover = {
+  displayName: string;
+  powwow: string;
+  username: string;
+  nbkid: string;
+  canApprove: boolean;
+};
 
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
+type QuackApproverGroup = {
+  roleName: string;
+  approvers: PathApprover[];
+};
 
-    describe('uploadDotDirs', () => {
-        test('should upload keybindings.json if it exists', async () => {
-            (fs.existsSync as jest.Mock).mockReturnValue(true);
-            (fs.promises.readFile as jest.MockedFunction<typeof fs.promises.readFile>).mockResolvedValue('mock-content');
-            const writeConfigFileSpy = jest.spyOn(dotDirsSync, 'writeConfigFile');
+type ApproverViewProp = {
+  approverGroups?: QuackApproverGroup[];
+  onUserClick?: (approver: PathApprover, checked: boolean) => void;
+  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
+  isReviewerSelectable: boolean;
+  selectedUsers?: PathApprover[] | null;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
+};
 
-            await dotDirsSync['uploadDotDirs']();
+/** Single approver node rendered inside a <vscode-tree-item> */
+const ApproverLeaf: React.FC<{
+  approver: PathApprover;
+  isReviewerSelectable: boolean;
+  isSelected: boolean;
+  onToggle: (approver: PathApprover, checked: boolean, e: React.MouseEvent) => void;
+}> = ({ approver, isReviewerSelectable, isSelected, onToggle }) => {
+  return (
+    <vscode-tree-item data-kind="approver" data-username={approver.username}>
+      <span className={styles.approverItemStyle}>
+        {isReviewerSelectable && (
+          <vscode-checkbox
+            checked={isSelected}
+            onClick={(e: any) => {
+              // prevent expanding/selecting the tree item when clicking the checkbox
+              e.stopPropagation?.();
+              onToggle(approver, !isSelected, e);
+            }}
+          />
+        )}
+        <FormLabel style={{ display: "inline-block", marginLeft: 5 }}>
+          {approver.displayName} {userToLink(approver.username, approver.powwow)} {approver.powwow}
+        </FormLabel>
+      </span>
+    </vscode-tree-item>
+  );
+};
 
-            expect(writeConfigFileSpy).toHaveBeenCalledWith('.vscode/keybindings.json', 'mock-content');
-        });
+/** Group node with children inside <vscode-tree> */
+const ApproverGroupNode: React.FC<{
+  group: QuackApproverGroup;
+  initiallyExpanded?: boolean;
+  selected: Set<string>;
+  onSelectGroup?: (group: QuackApproverGroup, checked: boolean) => void;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
+  renderLeaf: (approver: PathApprover, index: number) => React.ReactNode;
+}> = ({ group, initiallyExpanded, selected, onSelectGroup, onClickGroupLink, renderLeaf }) => {
+  const { roleName, approvers } = group;
+  const allChecked = approvers.length > 0 && approvers.every((a) => selected.has(a.username));
+  const initials = approvers.map((x) => x.displayName?.[0] ?? "").join(" | ");
+  let tooltip = `Click to copy Quartz Chat initials to clipboard\n${initials}`;
+  if (onSelectGroup) tooltip += ` and select all reviewers in ${roleName} group`;
 
-        test('should upload dot-prefixed folders', async () => {
-            (fs.promises.readdir as jest.MockedFunction<typeof fs.promises.readdir>).mockResolvedValue([
-                createMockDirent('.vscode', true),
-                createMockDirent('.git', true),
-            ]);
-            const uploadFolderSpy = jest.spyOn(dotDirsSync as any, 'uploadFolder').mockResolvedValue();
-        
-            await dotDirsSync['uploadDotDirs']();
-        
-            expect(uploadFolderSpy).toHaveBeenCalledWith('.vscode', '/mock/workspace/.vscode');
-            expect(uploadFolderSpy).toHaveBeenCalledWith('.git', '/mock/workspace/.git');
-        });
-    });
+  const onGroupLabelClick = (e: React.MouseEvent) => {
+    // Add initials to the Comment box (your parent handler)
+    e.stopPropagation(); // don’t toggle the tree row
+    onClickGroupLink?.(group);
+  };
 
-    describe('downloadDotDirs', () => {
-        test('should download keybindings.json from Sandra', async () => {
-            jest.spyOn(dotDirsSync, 'listDotDirs').mockResolvedValue(['.vscode']);
-            jest.spyOn(dotDirsSync, 'listConfigFiles').mockResolvedValue(['keybindings.json']);
-            jest.spyOn(dotDirsSync, 'readConfigFile').mockResolvedValue('mock-content');
-            const writeFileContentSpy = jest.spyOn(fs.promises, 'writeFile');
+  const onGroupCheckboxClick = (e: any) => {
+    e.stopPropagation(); // don’t toggle expand/collapse
+    onSelectGroup?.(group, !allChecked);
+  };
 
-            await dotDirsSync['downloadDotDirs']();
+  return (
+    <vscode-tree-item
+      data-kind="group"
+      data-role={roleName}
+      expanded={!!initiallyExpanded}
+    >
+      {/* Header row content */}
+      <span className={styles.groupHeader} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {onSelectGroup && (
+          <vscode-checkbox checked={allChecked} onClick={onGroupCheckboxClick} />
+        )}
+        {/* Keep your copy-to-clipboard link and click-to-append-initials behavior */}
+        <span onClick={onGroupLabelClick}>
+          {createCopyLink(roleName, initials, tooltip)}
+        </span>
+      </span>
 
-            expect(writeFileContentSpy).toHaveBeenCalledWith(
-                expect.stringContaining('keybindings.json'),
-                'mock-content'
-            );
-        });
+      {/* Children */}
+      {approvers.map(renderLeaf)}
+    </vscode-tree-item>
+  );
+};
 
-        test('should download other dot-prefixed folders', async () => {
-            jest.spyOn(dotDirsSync, 'listDotDirs').mockResolvedValue(['.git']);
-            jest.spyOn(dotDirsSync, 'listConfigFiles').mockResolvedValue(['config']);
-            jest.spyOn(dotDirsSync, 'readConfigFile').mockResolvedValue('mock-content');
-            const writeFileContentSpy = jest.spyOn(fs.promises, 'writeFile');
+/*** Approver View (unchanged external API) ***/
+export const ApproversView: React.FC<ApproverViewProp> = ({
+  approverGroups,
+  selectedUsers,
+  isReviewerSelectable,
+  onUserClick,
+  onUserGroupClick,
+  onClickGroupLink,
+}) => {
+  if (!approverGroups) {
+    return <SpinningIcon iconName="refresh" spin={approverGroups === undefined} />;
+  }
 
-            await dotDirsSync['downloadDotDirs']();
+  const groups = useMemo<QuackApproverGroup[]>(
+    () => approverGroups.filter((g) => g.approvers.length > 0),
+    [approverGroups]
+  );
 
-            expect(writeFileContentSpy).toHaveBeenCalledWith(
-                expect.stringContaining('/mock/workspace/.git/config'),
-                'mock-content'
-            );
-        });
-    });
+  const selectedUsernames = new Set<string>(selectedUsers?.map((u) => u.username));
 
-    describe('handleTextDocumentSave', () => {
-        test('should upload keybindings.json on save', async () => {
-            const mockDoc = { uri: { fsPath: '/mock/keybindings.json' }, getText: jest.fn().mockReturnValue('mock-content') } as any;
-            jest.spyOn(dotDirsSync, 'writeConfigFile').mockResolvedValue();
-            jest.spyOn(dotDirsSync, 'keybindingsPath', 'get').mockReturnValue(vscode.Uri.file('/mock/keybindings.json'));
+  return (
+    <div className={styles.listStyle}>
+      {/* VSCode Tree */}
+      <vscode-tree /* tweak behavior via props from docs (expandMode, indentGuides, etc.) */
+        multi-select={false}
+        indent-guides="onHover"
+      >
+        {groups.map((group, index) => (
+          <ApproverGroupNode
+            key={`quack_group_${group.roleName}_${index}`}
+            group={group}
+            initiallyExpanded={index === 0}
+            selected={selectedUsernames}
+            onSelectGroup={onUserGroupClick}
+            onClickGroupLink={onClickGroupLink}
+            renderLeaf={(approver, i) => (
+              <ApproverLeaf
+                key={`approver_${group.roleName}_${approver.username}_${i}`}
+                approver={approver}
+                isReviewerSelectable={isReviewerSelectable}
+                isSelected={selectedUsernames.has(approver.username)}
+                onToggle={(val, checked) => onUserClick?.(val, checked)}
+              />
+            )}
+          />
+        ))}
+      </vscode-tree>
+    </div>
+  );
+};
 
-            await dotDirsSync['handleTextDocumentSave'](mockDoc);
-
-            expect(dotDirsSync['writeConfigFile']).toHaveBeenCalledWith('.vscode/keybindings.json', 'mock-content');
-        });
-
-        test('should not upload non-keybindings.json files', async () => {
-            const mockDoc = { uri: { fsPath: '/mock/other-file.json' }, getText: jest.fn() } as any;
-            const writeConfigFileSpy = jest.spyOn(dotDirsSync, 'writeConfigFile');
-
-            await dotDirsSync['handleTextDocumentSave'](mockDoc);
-
-            expect(writeConfigFileSpy).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('syncAllDotDirs', () => {
-        test('should call uploadDotDirs and downloadDotDirs', async () => {
-            const uploadSpy = jest.spyOn(dotDirsSync as any, 'uploadDotDirs').mockResolvedValue(undefined);
-            const downloadSpy = jest.spyOn(dotDirsSync as any, 'downloadDotDirs').mockResolvedValue(undefined);
-
-            await dotDirsSync.syncAllDotDirs();
-
-            expect(uploadSpy).toHaveBeenCalled();
-            expect(downloadSpy).toHaveBeenCalled();
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Dot-dirs sync complete.');
-        });
-    });
-});
+export default ApproversView;

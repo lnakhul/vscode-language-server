@@ -184,3 +184,88 @@ export const ApproversView: React.FC<ApproverViewProp> = ({
 };
 
 export default ApproversView;
+
+
+==========================================================================================
+import React, { useMemo, useRef, useEffect } from "react";
+// …your existing imports…
+
+const ApproverGroupTreeItem: React.FC<ApproverListProps> = ({
+  group,
+  selected,
+  isExpanded,
+  onSelectGroup,
+  render,
+  onClickGroupLink,
+}) => {
+  const { roleName, approvers } = group;
+  const itemRef = useRef<any>(null);
+  const linkHostRef = useRef<HTMLSpanElement | null>(null);
+
+  const allChecked = approvers.every((a) => selected.has(a.userName));
+
+  // Use the same initials you rely on elsewhere (powwow) so copy/insert stays identical
+  const initials = approvers.map((x) => x.powwow).join(" | ");
+
+  let tooltip = `Click on element to copy Quartz Chat Initiials to clipboard\n${initials}`;
+  if (onSelectGroup) tooltip += ` and select all reviewers in ${roleName} quack group`;
+
+  const onGroupCheckboxClick: React.MouseEventHandler = (e) => {
+    e.stopPropagation();
+    onSelectGroup?.(group, !allChecked);
+    if (itemRef.current) itemRef.current.open = !itemRef.current.open;
+  };
+
+  // Normalize the <a> returned by createCopyLink so it never opens a new frame
+  useEffect(() => {
+    const host = linkHostRef.current;
+    if (!host) return;
+    const anchor = host.querySelector<HTMLAnchorElement>("a");
+    if (!anchor) return;
+
+    // Force in-document nav to avoid CSP “frame-src” block
+    anchor.setAttribute("target", "_self");
+    anchor.removeAttribute("rel");
+
+    const onAnchorClick = (ev: MouseEvent) => {
+      // Keep tree from toggling / swallowing the event:
+      ev.stopPropagation();
+      // Prevent default browser/webview nav route that triggered CSP:
+      ev.preventDefault();
+
+      // Preserve your behavior: append initials to Comments:
+      onClickGroupLink?.(group);
+
+      // Keep branch open:
+      if (itemRef.current) itemRef.current.open = true;
+
+      // Hand off to VS Code by navigating the webview to the command: URI
+      // (VS Code will intercept if enableCommandUris is true)
+      (window as any).location.href = anchor.href;
+    };
+
+    // Use capture to win over internal handlers
+    anchor.addEventListener("click", onAnchorClick, { capture: true });
+    return () => anchor.removeEventListener("click", onAnchorClick, { capture: true } as any);
+  }, [group, onClickGroupLink, initials]);
+
+  return (
+    <vscode-tree-item ref={itemRef} open={isExpanded as any}>
+      <div className={styles.groupHeader as any} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {onSelectGroup && (
+          <vscode-checkbox checked={allChecked} onClick={onGroupCheckboxClick} />
+        )}
+
+        <FormLabel cssClassName={styles.groupHeader}>
+          {/* Wrap createCopyLink so we can normalize the inner <a> */}
+          <span ref={linkHostRef} onMouseDown={(e) => e.stopPropagation()}>
+            {createCopyLink(roleName, initials, tooltip)}
+          </span>
+        </FormLabel>
+      </div>
+
+      {approvers.map((a, i) => render(a, i))}
+    </vscode-tree-item>
+  );
+};
+

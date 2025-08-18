@@ -327,3 +327,76 @@ useEffect(() => {
 }, [group, onClickGroupLink]);
 
 
+========================================================================================================================
+
+// once per module
+const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+
+function ApproverGroupTreeItem({ group, selected, isExpanded, onSelectGroup, onClickGroupLink, render }) {
+  const itemRef = React.useRef<any>(null);
+  const linkHostRef = React.useRef<HTMLSpanElement | null>(null);
+
+  const allChecked = group.approvers.every(a => selected.has(a.username));
+  const initials = React.useMemo(() => group.approvers.map(x => x.powwow).join(" | "), [group.approvers]);
+
+  React.useEffect(() => {
+    const host = linkHostRef.current;
+    if (!host) return;
+    const a = host.querySelector<HTMLAnchorElement>("a");
+    if (!a) return;
+
+    // 1) Keep look/tooltip, but prevent ANY navigation (the CSP culprit)
+    const href = a.getAttribute("href") || "";
+    a.setAttribute("data-href", href);
+    a.removeAttribute("href");              // <- critical: no navigation target
+    a.setAttribute("role", "button");
+    a.setAttribute("tabindex", "0");
+
+    // 2) Click handler in CAPTURE phase so tree can’t hijack it
+    const onClick = (ev: Event) => {
+      (ev as any).stopImmediatePropagation?.();
+      ev.stopPropagation();
+      ev.preventDefault();
+
+      // Append initials to Comments (your existing behavior)
+      onClickGroupLink?.(group);
+
+      // Keep the branch open
+      if (itemRef.current) itemRef.current.open = true;
+
+      // Ask extension to copy to clipboard using your existing command
+      vscodeApi?.postMessage({ type: "copyInitials", text: initials });
+    };
+
+    a.addEventListener("click", onClick, { capture: true });
+    a.addEventListener("pointerdown", onClick, { capture: true }); // belt & suspenders
+    return () => {
+      a.removeEventListener("click", onClick, { capture: true } as any);
+      a.removeEventListener("pointerdown", onClick, { capture: true } as any);
+    };
+  }, [group, onClickGroupLink, initials]);
+
+  return (
+    <vscode-tree-item ref={itemRef} open={isExpanded as any}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {onSelectGroup && (
+          <vscode-checkbox
+            checked={allChecked}
+            onClick={(e) => { e.stopPropagation(); onSelectGroup(group, !allChecked); }}
+          />
+        )}
+        <FormLabel>
+          {/* Use your same helper for visuals/tooltip; we neutralize it above */}
+          <span ref={linkHostRef} onMouseDown={(e) => e.stopPropagation()}>
+            {createCopyLink(group.roleName, initials, `Click to copy initials\n${initials}`)}
+          </span>
+        </FormLabel>
+      </div>
+
+      {group.approvers.map((a, i) => render(a, i))}
+    </vscode-tree-item>
+  );
+}
+
+
+

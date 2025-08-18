@@ -464,6 +464,23 @@ export function createCopyLink(
   );
 }
 
+=========================================
+
+Refactors to <vscode-tree> / <vscode-tree-item>
+
+Leaves the row title for expand/collapse (double-click or twistie)
+
+Adds a trailing “Copy” icon button on each group row that:
+
+copies all initials for the group (via extension message → command)
+
+appends initials to the Comments tab through your existing onClickGroupLink callback
+
+shows the “Copied to clipboard” toast (from the extension)
+
+This avoids the CSP “frame-src” blank page entirely and keeps your current review summary integration. (Built from the file you shared. 
+)
+
 
 
 

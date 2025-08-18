@@ -1,35 +1,13 @@
-import { createElement, useMemo } from "react";
+import React, { useMemo } from "react";
 import "@vscode-elements/elements/dist/vscode-checkbox";
 import "@vscode-elements/elements/dist/vscode-tree";
 import "@vscode-elements/elements/dist/vscode-tree-item";
 import FormLabel from "./FormLabel";
 import { SpinningIcon } from "./SpinningIcon";
 import styles from "../css/ApproversListView.module.css";
-import { createCopyLink as makeCopyLink, userToLink } from "../reactFunctions";
+import { userToLink } from "../reactFunctions";
 
-/** keep your command link helper */
-function commandLink(command: string, ...args: string[]) {
-  const encodedArgs =
-    args.length > 0 ? `?${encodeURIComponent(JSON.stringify(args))}` : "";
-  return `command:${command}${encodedArgs}`;
-}
-
-/** keep your local copy helper, just reusing commandLink */
-function createCopyLink(label: string, text: string, tooltip: string) {
-  return createElement(
-    "a",
-    {
-      href: commandLink("quartz.internal.copyToClipboard", text),
-      title: tooltip,
-      onClick: (e: React.MouseEvent) => {
-        // let the command run, but don’t toggle selection/expansion
-        e.stopPropagation();
-      },
-    },
-    label
-  );
-}
-
+/** Types (same as before) */
 type PathApprover = {
   displayName: string;
   powwow: string;
@@ -52,84 +30,119 @@ type ApproverViewProp = {
   onClickGroupLink?: (group: QuackApproverGroup) => void;
 };
 
-/** Single approver node rendered inside a <vscode-tree-item> */
-const ApproverLeaf: React.FC<{
+/** Helpers */
+function commandLink(command: string, ...args: string[]) {
+  const encodedArgs =
+    args.length > 0 ? `?${encodeURIComponent(JSON.stringify(args))}` : "";
+  return `command:${command}${encodedArgs}`;
+}
+
+function Initials(group: QuackApproverGroup) {
+  return group.approvers.map((a) => a.powwow).join(" | ");
+}
+
+/** Leaf item (approver) rendered as a tree item */
+function ApproverTreeItem(props: {
   approver: PathApprover;
-  isReviewerSelectable: boolean;
+  isSelectable: boolean;
   isSelected: boolean;
-  onToggle: (approver: PathApprover, checked: boolean, e: React.MouseEvent) => void;
-}> = ({ approver, isReviewerSelectable, isSelected, onToggle }) => {
-  return (
-    <vscode-tree-item data-kind="approver" data-username={approver.username}>
-      <span className={styles.approverItemStyle}>
-        {isReviewerSelectable && (
-          <vscode-checkbox
-            checked={isSelected}
-            onClick={(e: any) => {
-              // prevent expanding/selecting the tree item when clicking the checkbox
-              e.stopPropagation?.();
-              onToggle(approver, !isSelected, e);
-            }}
-          />
-        )}
-        <FormLabel style={{ display: "inline-block", marginLeft: 5 }}>
-          {approver.displayName} {userToLink(approver.username, approver.powwow)} {approver.powwow}
-        </FormLabel>
-      </span>
-    </vscode-tree-item>
-  );
-};
+  onToggle?: (approver: PathApprover, checked: boolean) => void;
+}) {
+  const { approver, isSelectable, isSelected, onToggle } = props;
 
-/** Group node with children inside <vscode-tree> */
-const ApproverGroupNode: React.FC<{
-  group: QuackApproverGroup;
-  initiallyExpanded?: boolean;
-  selected: Set<string>;
-  onSelectGroup?: (group: QuackApproverGroup, checked: boolean) => void;
-  onClickGroupLink?: (group: QuackApproverGroup) => void;
-  renderLeaf: (approver: PathApprover, index: number) => React.ReactNode;
-}> = ({ group, initiallyExpanded, selected, onSelectGroup, onClickGroupLink, renderLeaf }) => {
-  const { roleName, approvers } = group;
-  const allChecked = approvers.length > 0 && approvers.every((a) => selected.has(a.username));
-  const initials = approvers.map((x) => x.displayName?.[0] ?? "").join(" | ");
-  let tooltip = `Click to copy Quartz Chat initials to clipboard\n${initials}`;
-  if (onSelectGroup) tooltip += ` and select all reviewers in ${roleName} group`;
-
-  const onGroupLabelClick = (e: React.MouseEvent) => {
-    // Add initials to the Comment box (your parent handler)
-    e.stopPropagation(); // don’t toggle the tree row
-    onClickGroupLink?.(group);
+  const onCheckboxClick: React.MouseEventHandler = (e) => {
+    e.stopPropagation();
+    onToggle?.(approver, !isSelected);
   };
 
-  const onGroupCheckboxClick = (e: any) => {
-    e.stopPropagation(); // don’t toggle expand/collapse
+  return (
+    <vscode-tree-item class={styles.approverItemStyle as any}>
+      {isSelectable && (
+        <vscode-checkbox
+          checked={isSelected}
+          onClick={onCheckboxClick}
+        ></vscode-checkbox>
+      )}
+      <FormLabel style={{ display: "inline-block", marginLeft: 5 }}>
+        {approver.displayName} {userToLink(approver.username, approver.powwow)}{" "}
+        {approver.powwow}
+      </FormLabel>
+    </vscode-tree-item>
+  );
+}
+
+/** Group item (branch) as a tree item containing approver leaves */
+function ApproverGroupTreeItem(props: {
+  group: QuackApproverGroup;
+  isInitiallyOpen: boolean;
+  selectedUsernames: Set<string>;
+  onSelectGroup?: (group: QuackApproverGroup, checked: boolean) => void;
+  onClickGroupLink?: (group: QuackApproverGroup) => void;
+  renderApprover: (approver: PathApprover, idx: number) => React.ReactNode;
+}) {
+  const {
+    group,
+    isInitiallyOpen,
+    selectedUsernames,
+    onSelectGroup,
+    onClickGroupLink,
+    renderApprover,
+  } = props;
+
+  const { roleName, approvers } = group;
+  const allChecked = approvers.every((a) => selectedUsernames.has(a.username));
+  const initials = Initials(group);
+
+  const tooltip = [
+    "Click to copy Quartz Chat initials to clipboard",
+    initials,
+    onSelectGroup ? `and select all reviewers in ${roleName} group` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const onGroupCheckboxClick: React.MouseEventHandler = (e) => {
+    e.stopPropagation();
     onSelectGroup?.(group, !allChecked);
   };
 
+  const onGroupLinkClick: React.MouseEventHandler<HTMLAnchorElement> = (e) => {
+    // Don’t let the tree toggle because we’re performing actions.
+    e.stopPropagation();
+    onClickGroupLink?.(group);
+    // Allow the anchor’s href=command:... to execute (no preventDefault!).
+  };
+
   return (
-    <vscode-tree-item
-      data-kind="group"
-      data-role={roleName}
-      expanded={!!initiallyExpanded}
-    >
-      {/* Header row content */}
-      <span className={styles.groupHeader} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <vscode-tree-item open={isInitiallyOpen as any}>
+      <div className={styles.groupHeader as any} style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {onSelectGroup && (
-          <vscode-checkbox checked={allChecked} onClick={onGroupCheckboxClick} />
+          <vscode-checkbox
+            checked={allChecked}
+            onClick={onGroupCheckboxClick}
+          ></vscode-checkbox>
         )}
-        {/* Keep your copy-to-clipboard link and click-to-append-initials behavior */}
-        <span onClick={onGroupLabelClick}>
-          {createCopyLink(roleName, initials, tooltip)}
-        </span>
-      </span>
+        {/* "Rich content" label area */}
+        <FormLabel cssClassName={styles.groupHeader}>
+          <a
+            href={commandLink("quartz.internal.copyToClipboard", initials)}
+            title={tooltip}
+            onClick={onGroupLinkClick}
+            // make it obvious this is clickable-but not a navigation
+            style={{ cursor: "pointer", textDecoration: "underline" }}
+          >
+            {roleName}
+          </a>
+        </FormLabel>
+      </div>
 
       {/* Children */}
-      {approvers.map(renderLeaf)}
+      {approvers.map(renderApprover)}
     </vscode-tree-item>
   );
-};
+}
 
-/*** Approver View (unchanged external API) ***/
+/** Top-level view: now renders a single <vscode-tree> containing all groups/items */
 export const ApproversView: React.FC<ApproverViewProp> = ({
   approverGroups,
   selectedUsers,
@@ -138,45 +151,42 @@ export const ApproversView: React.FC<ApproverViewProp> = ({
   onUserGroupClick,
   onClickGroupLink,
 }) => {
-  if (!approverGroups) {
+  if (!approverGroups)
     return <SpinningIcon iconName="refresh" spin={approverGroups === undefined} />;
-  }
 
-  const groups = useMemo<QuackApproverGroup[]>(
+  const groups = useMemo(
     () => approverGroups.filter((g) => g.approvers.length > 0),
     [approverGroups]
   );
-
-  const selectedUsernames = new Set<string>(selectedUsers?.map((u) => u.username));
+  const selectedUsernames = new Set<string>(
+    selectedUsers?.map((u) => u.username)
+  );
 
   return (
-    <div className={styles.listStyle}>
-      {/* VSCode Tree */}
-      <vscode-tree /* tweak behavior via props from docs (expandMode, indentGuides, etc.) */
-        multi-select={false}
-        indent-guides="onHover"
-      >
-        {groups.map((group, index) => (
-          <ApproverGroupNode
-            key={`quack_group_${group.roleName}_${index}`}
-            group={group}
-            initiallyExpanded={index === 0}
-            selected={selectedUsernames}
-            onSelectGroup={onUserGroupClick}
-            onClickGroupLink={onClickGroupLink}
-            renderLeaf={(approver, i) => (
-              <ApproverLeaf
-                key={`approver_${group.roleName}_${approver.username}_${i}`}
-                approver={approver}
-                isReviewerSelectable={isReviewerSelectable}
-                isSelected={selectedUsernames.has(approver.username)}
-                onToggle={(val, checked) => onUserClick?.(val, checked)}
-              />
-            )}
-          />
-        ))}
-      </vscode-tree>
-    </div>
+    <vscode-tree
+      // Keep default single-click expand; configurable if you want double-click
+      class={styles.listStyle as any}
+    >
+      {groups.map((group, index) => (
+        <ApproverGroupTreeItem
+          key={`quack_approver_${index}`}
+          group={group}
+          isInitiallyOpen={index === 0}
+          selectedUsernames={selectedUsernames}
+          onSelectGroup={onUserGroupClick}
+          onClickGroupLink={onClickGroupLink}
+          renderApprover={(approver, idx) => (
+            <ApproverTreeItem
+              key={`approver_item_${group.roleName}_${approver.username}_${idx}`}
+              approver={approver}
+              isSelectable={isReviewerSelectable}
+              isSelected={selectedUsernames.has(approver.username)}
+              onToggle={onUserClick}
+            />
+          )}
+        />
+      ))}
+    </vscode-tree>
   );
 };
 

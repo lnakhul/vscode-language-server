@@ -269,3 +269,61 @@ const ApproverGroupTreeItem: React.FC<ApproverListProps> = ({
   );
 };
 
+
+=============================================================
+
+// once, at module scope
+const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+
+// inside ApproverGroupTreeItem
+const linkHostRef = useRef<HTMLSpanElement | null>(null);
+
+useEffect(() => {
+  const host = linkHostRef.current;
+  if (!host) return;
+
+  const a = host.querySelector<HTMLAnchorElement>("a");
+  if (!a) return;
+
+  // keep look & tooltip but prevent native nav
+  const href = a.getAttribute("href") || "";
+  a.setAttribute("data-href", href);
+  a.removeAttribute("href");
+  a.setAttribute("role", "button");
+  a.setAttribute("tabindex", "0");
+
+  // capture early, and block every route to navigation
+  const handler = (ev: Event) => {
+    // block <vscode-tree> and the browser
+    (ev as any).stopImmediatePropagation?.();
+    ev.stopPropagation();
+    ev.preventDefault();
+
+    // your existing “append to Comments” path
+    onClickGroupLink?.(group);
+    if (itemRef.current) itemRef.current.open = true;
+
+    // hand the command: URI to VS Code (enableCommandUris must be true)
+    try {
+      const cmd = a.getAttribute("data-href")!;
+      // direct nav causes VS Code to intercept the command:
+      (window as any).location.href = cmd;
+    } catch (e) {
+      // (optional) fallback if command URIs are disabled
+      console.error("command nav failed", e);
+    }
+  };
+
+  // capture phase = true; listen to multiple events to preempt synthetic clicks
+  a.addEventListener("click", handler, { capture: true });
+  a.addEventListener("pointerdown", handler, { capture: true });
+  a.addEventListener("mousedown", handler, { capture: true });
+
+  return () => {
+    a.removeEventListener("click", handler, { capture: true } as any);
+    a.removeEventListener("pointerdown", handler, { capture: true } as any);
+    a.removeEventListener("mousedown", handler, { capture: true } as any);
+  };
+}, [group, onClickGroupLink]);
+
+

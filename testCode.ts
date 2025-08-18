@@ -398,5 +398,72 @@ function ApproverGroupTreeItem({ group, selected, isExpanded, onSelectGroup, onC
   );
 }
 
+===================================================================================================
+
+// reactFunctions.tsx
+import React from "react";
+
+type CreateCopyLinkOpts = {
+  as?: "a" | "tree";        // default "a"
+  className?: string;
+  tooltip?: string;
+  onActivate?: () => void;  // optional side-effect (e.g., append to Comments)
+};
+
+function commandLink(command: string, ...args: string[]) {
+  const encoded = args.length ? `?${encodeURIComponent(JSON.stringify(args))}` : "";
+  return `command:${command}${encoded}`;
+}
+
+export function createCopyLink(
+  label: string,
+  textToCopy: string,
+  tooltip?: string,
+  opts: CreateCopyLinkOpts = {}
+): React.ReactNode {
+  const { as = "a", className, onActivate } = opts;
+  const cmd = commandLink("quartz.internal.copyToClipboard", textToCopy);
+
+  if (as === "a") {
+    // Original behavior for non-tree contexts
+    return (
+      <a href={cmd} title={tooltip} className={className}>
+        {label}
+      </a>
+    );
+  }
+
+  // Tree-safe: no href; programmatic command navigation
+  const handleClick: React.MouseEventHandler = (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // don't let <vscode-tree-item> treat this as a row toggle
+    onActivate?.();
+    (window as any).location.href = cmd; // VS Code intercepts if enableCommandUris: true
+  };
+
+  const handleKeyDown: React.KeyboardEventHandler = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).click();
+    }
+  };
+
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      title={tooltip}
+      className={className}
+      onPointerDown={(e) => e.stopPropagation()} // extra guard vs. row toggle
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+    >
+      {label}
+    </span>
+  );
+}
+
+
 
 

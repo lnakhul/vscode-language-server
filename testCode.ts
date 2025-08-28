@@ -1,486 +1,211 @@
-import React, { useMemo, useRef } from "react";
-import "@vscode-elements/elements/dist/vscode-checkbox";
-import "@vscode-elements/elements/dist/vscode-tree";
-import "@vscode-elements/elements/dist/vscode-tree-item";
-import FormLabel from "./FormLabel";
-import { SpinningIcon } from "./SpinningIcon";
-import styles from "../css/ApproversListView.module.css";
-import { createCopyLink, userToLink } from "../reactFunctions";
+// src/docstringRefs.ts
+import * as vscode from 'vscode';
+import { ProxyManager, ProxyProcessState } from '/proxyManager';
 
-/** Types (same as your file) */
-type PathApprover = {
-  displayName: string;
-  powwow: string;
-  username: string;
-  nbkid: string;
-  canApprove: boolean;
-};
+const DOTTED_REF = /[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+/;           // e.g., pkg.mod.Class / pkg.mod.func
+const PYTEST_NODEID = /(?:(?:[^:\s]+\.py)|(?:[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+))(?:::[A-Za-z_]\w+)*(?:::[A-Za-z_]\w+)?/;
 
-type QuackApproverGroup = {
-  roleName: string;
-  approvers: PathApprover[];
-};
+const TRIPLE_STR = /("""|''')[\s\S]*?\1/g;                      // docstring blocks
+const LINE_COMMENT = /^\s*#/;                                   // quick check
 
-type ApproverViewProp = {
-  approverGroups?: QuackApproverGroup[];
-  onUserClick?: (approver: PathApprover, checked: boolean) => void;
-  onUserGroupClick?: (group: QuackApproverGroup, checked: boolean) => void;
-  isReviewerSelectable: boolean;
-  selectedUsers?: PathApprover[] | null;
-  onClickGroupLink?: (group: QuackApproverGroup) => void;
-};
-
-/** ----- Leaf (Approver) as a vscode-tree-item ----- */
-type ApproverItemProps = {
-  approver: PathApprover;
-  isApproverSelectable: boolean;
-  isApproverSelected?: boolean;
-  onApproverCheckClicked?: (val: PathApprover, checked: boolean) => void;
-};
-
-const ApproverTreeItem: React.FC<ApproverItemProps> = ({
-  approver,
-  isApproverSelectable,
-  isApproverSelected,
-  onApproverCheckClicked,
-}) => {
-  const checked = !!isApproverSelected;
-
-  const onToggleChecked: React.MouseEventHandler = (e) => {
-    e.stopPropagation(); // don’t toggle the branch when clicking the checkbox
-    onApproverCheckClicked?.(approver, !checked);
-  };
-
-  return (
-    <vscode-tree-item class={styles.approverItemStyle as any}>
-      {isApproverSelectable && (
-        <vscode-checkbox checked={checked} onClick={onToggleChecked} />
-      )}
-      <FormLabel style={{ display: "inline-block", marginLeft: "5px" }}>
-        {approver.displayName} {userToLink(approver.username, approver.powwow)}{" "}
-        {approver.powwow}
-      </FormLabel>
-    </vscode-tree-item>
-  );
-};
-
-/** ----- Group (Branch) as a vscode-tree-item with children ----- */
-type ApproverListProps = {
-  group: QuackApproverGroup;
-  selected: Set<string>;
-  isExpanded?: boolean;
-  onSelectGroup?: (group: QuackApproverGroup, checked: boolean) => void;
-  render: (approver: PathApprover, index: number) => React.ReactNode;
-  onClickGroupLink?: (group: QuackApproverGroup) => void;
-};
-
-const ApproverGroupTreeItem: React.FC<ApproverListProps> = ({
-  group,
-  selected,
-  isExpanded,
-  onSelectGroup,
-  render,
-  onClickGroupLink,
-}) => {
-  const { roleName, approvers } = group;
-  const itemRef = useRef<any>(null);
-  const allChecked = approvers.every((a) => selected.has(a.username));
-
-  // Keep your current initials computation
-  const initials = approvers.map((x) => x.displayName[0]).join(" | ");
-  let tooltip = `Click on element to copy Quartz Chat Initiials to clipboard\n${initials}`;
-  if (onSelectGroup) tooltip += ` and select all reviewers in ${roleName} quack group`;
-
-  const onGroupCheckboxClick: React.MouseEventHandler = (e) => {
-    e.stopPropagation();
-    onSelectGroup?.(group, !allChecked);
-    // mirror previous UX where checkbox toggled the expand/collapse state
-    if (itemRef.current) {
-      itemRef.current.open = !itemRef.current.open;
-    }
-  };
-
-  const onGroupLinkClick: React.MouseEventHandler<HTMLSpanElement> = (e) => {
-    // Don’t let the tree toggle; allow the <a> inside to fire its command URI
-    e.stopPropagation();
-    onClickGroupLink?.(group);
-    // do not preventDefault() — we want the anchor’s command to run
-    // also (optionally) ensure the branch is open after clicking
-    if (itemRef.current) itemRef.current.open = true;
-  };
-
-  return (
-    <vscode-tree-item ref={itemRef} open={isExpanded as any}>
-      <div
-        className={styles.groupHeader as any}
-        style={{ display: "flex", alignItems: "center", gap: 8 }}
-      >
-        {onSelectGroup && (
-          <vscode-checkbox checked={allChecked} onClick={onGroupCheckboxClick} />
-        )}
-
-        {/* Wrap the existing createCopyLink anchor so we can attach onClick without changing its implementation */}
-        <FormLabel cssClassName={styles.groupHeader}>
-          <span onClick={onGroupLinkClick}>
-            {createCopyLink(roleName, initials, tooltip)}
-          </span>
-        </FormLabel>
-      </div>
-
-      {/* Children */}
-      {approvers.map((a, i) => render(a, i))}
-    </vscode-tree-item>
-  );
-};
-
-/** ----- Top-level View: a single <vscode-tree> containing all groups/items ----- */
-export const ApproversView: React.FC<ApproverViewProp> = ({
-  approverGroups,
-  selectedUsers,
-  isReviewerSelectable,
-  onUserClick,
-  onUserGroupClick,
-  onClickGroupLink,
-}) => {
-  if (!approverGroups)
-    return (
-      <SpinningIcon
-        iconName="refresh"
-        spin={approverGroups === undefined}
-      />
-    );
-
-  const groups = useMemo<QuackApproverGroup[]>(
-    () => approverGroups.filter((g) => g.approvers.length > 0),
-    [approverGroups]
-  );
-  const selectedUsernames = new Set<string>(
-    selectedUsers?.map((u) => u.username)
-  );
-
-  return (
-    <vscode-tree class={styles.listStyle as any}>
-      {groups.map((group, index) => (
-        <ApproverGroupTreeItem
-          key={`quack_approver_${index}`}
-          group={group}
-          selected={selectedUsernames}
-          onSelectGroup={onUserGroupClick}
-          onClickGroupLink={onClickGroupLink}
-          isExpanded={index === 0} // first group open
-          render={(approver, i) => (
-            <ApproverTreeItem
-              key={`approver_item_${group.roleName}_${approver.username}_${i}`}
-              approver={approver}
-              isApproverSelectable={isReviewerSelectable}
-              isApproverSelected={selectedUsernames.has(approver.username)}
-              onApproverCheckClicked={onUserClick}
-            />
-          )}
-        />
-      ))}
-    </vscode-tree>
-  );
-};
-
-export default ApproversView;
-
-
-==========================================================================================
-import React, { useMemo, useRef, useEffect } from "react";
-// …your existing imports…
-
-const ApproverGroupTreeItem: React.FC<ApproverListProps> = ({
-  group,
-  selected,
-  isExpanded,
-  onSelectGroup,
-  render,
-  onClickGroupLink,
-}) => {
-  const { roleName, approvers } = group;
-  const itemRef = useRef<any>(null);
-  const linkHostRef = useRef<HTMLSpanElement | null>(null);
-
-  const allChecked = approvers.every((a) => selected.has(a.userName));
-
-  // Use the same initials you rely on elsewhere (powwow) so copy/insert stays identical
-  const initials = approvers.map((x) => x.powwow).join(" | ");
-
-  let tooltip = `Click on element to copy Quartz Chat Initiials to clipboard\n${initials}`;
-  if (onSelectGroup) tooltip += ` and select all reviewers in ${roleName} quack group`;
-
-  const onGroupCheckboxClick: React.MouseEventHandler = (e) => {
-    e.stopPropagation();
-    onSelectGroup?.(group, !allChecked);
-    if (itemRef.current) itemRef.current.open = !itemRef.current.open;
-  };
-
-  // Normalize the <a> returned by createCopyLink so it never opens a new frame
-  useEffect(() => {
-    const host = linkHostRef.current;
-    if (!host) return;
-    const anchor = host.querySelector<HTMLAnchorElement>("a");
-    if (!anchor) return;
-
-    // Force in-document nav to avoid CSP “frame-src” block
-    anchor.setAttribute("target", "_self");
-    anchor.removeAttribute("rel");
-
-    const onAnchorClick = (ev: MouseEvent) => {
-      // Keep tree from toggling / swallowing the event:
-      ev.stopPropagation();
-      // Prevent default browser/webview nav route that triggered CSP:
-      ev.preventDefault();
-
-      // Preserve your behavior: append initials to Comments:
-      onClickGroupLink?.(group);
-
-      // Keep branch open:
-      if (itemRef.current) itemRef.current.open = true;
-
-      // Hand off to VS Code by navigating the webview to the command: URI
-      // (VS Code will intercept if enableCommandUris is true)
-      (window as any).location.href = anchor.href;
-    };
-
-    // Use capture to win over internal handlers
-    anchor.addEventListener("click", onAnchorClick, { capture: true });
-    return () => anchor.removeEventListener("click", onAnchorClick, { capture: true } as any);
-  }, [group, onClickGroupLink, initials]);
-
-  return (
-    <vscode-tree-item ref={itemRef} open={isExpanded as any}>
-      <div className={styles.groupHeader as any} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {onSelectGroup && (
-          <vscode-checkbox checked={allChecked} onClick={onGroupCheckboxClick} />
-        )}
-
-        <FormLabel cssClassName={styles.groupHeader}>
-          {/* Wrap createCopyLink so we can normalize the inner <a> */}
-          <span ref={linkHostRef} onMouseDown={(e) => e.stopPropagation()}>
-            {createCopyLink(roleName, initials, tooltip)}
-          </span>
-        </FormLabel>
-      </div>
-
-      {approvers.map((a, i) => render(a, i))}
-    </vscode-tree-item>
-  );
-};
-
-
-=============================================================
-
-// once, at module scope
-const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
-
-// inside ApproverGroupTreeItem
-const linkHostRef = useRef<HTMLSpanElement | null>(null);
-
-useEffect(() => {
-  const host = linkHostRef.current;
-  if (!host) return;
-
-  const a = host.querySelector<HTMLAnchorElement>("a");
-  if (!a) return;
-
-  // keep look & tooltip but prevent native nav
-  const href = a.getAttribute("href") || "";
-  a.setAttribute("data-href", href);
-  a.removeAttribute("href");
-  a.setAttribute("role", "button");
-  a.setAttribute("tabindex", "0");
-
-  // capture early, and block every route to navigation
-  const handler = (ev: Event) => {
-    // block <vscode-tree> and the browser
-    (ev as any).stopImmediatePropagation?.();
-    ev.stopPropagation();
-    ev.preventDefault();
-
-    // your existing “append to Comments” path
-    onClickGroupLink?.(group);
-    if (itemRef.current) itemRef.current.open = true;
-
-    // hand the command: URI to VS Code (enableCommandUris must be true)
-    try {
-      const cmd = a.getAttribute("data-href")!;
-      // direct nav causes VS Code to intercept the command:
-      (window as any).location.href = cmd;
-    } catch (e) {
-      // (optional) fallback if command URIs are disabled
-      console.error("command nav failed", e);
-    }
-  };
-
-  // capture phase = true; listen to multiple events to preempt synthetic clicks
-  a.addEventListener("click", handler, { capture: true });
-  a.addEventListener("pointerdown", handler, { capture: true });
-  a.addEventListener("mousedown", handler, { capture: true });
-
-  return () => {
-    a.removeEventListener("click", handler, { capture: true } as any);
-    a.removeEventListener("pointerdown", handler, { capture: true } as any);
-    a.removeEventListener("mousedown", handler, { capture: true } as any);
-  };
-}, [group, onClickGroupLink]);
-
-
-========================================================================================================================
-
-// once per module
-const vscodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
-
-function ApproverGroupTreeItem({ group, selected, isExpanded, onSelectGroup, onClickGroupLink, render }) {
-  const itemRef = React.useRef<any>(null);
-  const linkHostRef = React.useRef<HTMLSpanElement | null>(null);
-
-  const allChecked = group.approvers.every(a => selected.has(a.username));
-  const initials = React.useMemo(() => group.approvers.map(x => x.powwow).join(" | "), [group.approvers]);
-
-  React.useEffect(() => {
-    const host = linkHostRef.current;
-    if (!host) return;
-    const a = host.querySelector<HTMLAnchorElement>("a");
-    if (!a) return;
-
-    // 1) Keep look/tooltip, but prevent ANY navigation (the CSP culprit)
-    const href = a.getAttribute("href") || "";
-    a.setAttribute("data-href", href);
-    a.removeAttribute("href");              // <- critical: no navigation target
-    a.setAttribute("role", "button");
-    a.setAttribute("tabindex", "0");
-
-    // 2) Click handler in CAPTURE phase so tree can’t hijack it
-    const onClick = (ev: Event) => {
-      (ev as any).stopImmediatePropagation?.();
-      ev.stopPropagation();
-      ev.preventDefault();
-
-      // Append initials to Comments (your existing behavior)
-      onClickGroupLink?.(group);
-
-      // Keep the branch open
-      if (itemRef.current) itemRef.current.open = true;
-
-      // Ask extension to copy to clipboard using your existing command
-      vscodeApi?.postMessage({ type: "copyInitials", text: initials });
-    };
-
-    a.addEventListener("click", onClick, { capture: true });
-    a.addEventListener("pointerdown", onClick, { capture: true }); // belt & suspenders
-    return () => {
-      a.removeEventListener("click", onClick, { capture: true } as any);
-      a.removeEventListener("pointerdown", onClick, { capture: true } as any);
-    };
-  }, [group, onClickGroupLink, initials]);
-
-  return (
-    <vscode-tree-item ref={itemRef} open={isExpanded as any}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {onSelectGroup && (
-          <vscode-checkbox
-            checked={allChecked}
-            onClick={(e) => { e.stopPropagation(); onSelectGroup(group, !allChecked); }}
-          />
-        )}
-        <FormLabel>
-          {/* Use your same helper for visuals/tooltip; we neutralize it above */}
-          <span ref={linkHostRef} onMouseDown={(e) => e.stopPropagation()}>
-            {createCopyLink(group.roleName, initials, `Click to copy initials\n${initials}`)}
-          </span>
-        </FormLabel>
-      </div>
-
-      {group.approvers.map((a, i) => render(a, i))}
-    </vscode-tree-item>
-  );
+function inTripleQuotedString(document: vscode.TextDocument, pos: vscode.Position): boolean {
+  const text = document.getText();
+  const offset = document.offsetAt(pos);
+  for (const m of text.matchAll(TRIPLE_STR)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (offset >= start && offset <= end) return true;
+  }
+  return false;
+}
+function inComment(document: vscode.TextDocument, pos: vscode.Position): boolean {
+  const line = document.lineAt(pos.line).text;
+  return LINE_COMMENT.test(line);
 }
 
-===================================================================================================
-
-// reactFunctions.tsx
-import React from "react";
-
-type CreateCopyLinkOpts = {
-  as?: "a" | "tree";        // default "a"
-  className?: string;
-  tooltip?: string;
-  onActivate?: () => void;  // optional side-effect (e.g., append to Comments)
-};
-
-function commandLink(command: string, ...args: string[]) {
-  const encoded = args.length ? `?${encodeURIComponent(JSON.stringify(args))}` : "";
-  return `command:${command}${encoded}`;
+function wordRangeAt(document: vscode.TextDocument, position: vscode.Position): vscode.Range | undefined {
+  const rx = new RegExp(`(${PYTEST_NODEID.source})|(${DOTTED_REF.source})`, 'g');
+  const line = document.lineAt(position.line).text;
+  let match: RegExpExecArray | null;
+  while ((match = rx.exec(line))) {
+    const start = match.index!;
+    const end = start + match[0].length;
+    if (position.character >= start && position.character <= end) {
+      return new vscode.Range(new vscode.Position(position.line, start), new vscode.Position(position.line, end));
+    }
+  }
+  return document.getWordRangeAtPosition(position, rx);
 }
 
-export function createCopyLink(
-  label: string,
-  textToCopy: string,
-  tooltip?: string,
-  opts: CreateCopyLinkOpts = {}
-): React.ReactNode {
-  const { as = "a", className, onActivate } = opts;
-  const cmd = commandLink("quartz.internal.copyToClipboard", textToCopy);
+async function fileExists(uri: vscode.Uri): Promise<boolean> {
+  try { await vscode.workspace.fs.stat(uri); return true; } catch { return false; }
+}
 
-  if (as === "a") {
-    // Original behavior for non-tree contexts
-    return (
-      <a href={cmd} title={tooltip} className={className}>
-        {label}
-      </a>
-    );
+async function resolveDottedModuleToUris(modPath: string): Promise<vscode.Uri[]> {
+  // Try common roots: workspace, src/, tests/
+  const out: vscode.Uri[] = [];
+  const pieces = modPath.split('.');
+  const fileCandidate = pieces.join('/') + '.py';
+  const initCandidate = pieces.join('/') + '/__init__.py';
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  for (const f of folders) {
+    for (const rel of [fileCandidate, initCandidate, `src/${fileCandidate}`, `src/${initCandidate}`, `tests/${fileCandidate}`]) {
+      const uri = vscode.Uri.joinPath(f.uri, rel);
+      if (await fileExists(uri)) out.push(uri);
+    }
+  }
+  return Array.from(new Set(out.map(u => u.toString()))).map(s => vscode.Uri.parse(s));
+}
+
+async function findSymbolLine(doc: vscode.TextDocument, symbolName: string): Promise<vscode.Position | undefined> {
+  const rx = new RegExp(`^(\\s*)(class|def)\\s+${symbolName}\\b`);
+  for (let i = 0; i < doc.lineCount; i++) {
+    if (rx.test(doc.lineAt(i).text)) return new vscode.Position(i, 0);
+  }
+  return undefined;
+}
+
+function splitDotted(ref: string): { module: string; symbol?: string } {
+  // pkg.mod.Class -> {module: pkg.mod, symbol: Class}
+  const parts = ref.split('.');
+  if (parts.length <= 1) return { module: ref };
+  const symbol = parts[parts.length - 1];
+  const module = parts.slice(0, -1).join('.');
+  return { module, symbol };
+}
+
+function parsePytestNodeId(ref: string): { pyPathOrDotted: string; trail: string[] } {
+  const bits = ref.split('::');
+  return { pyPathOrDotted: bits[0], trail: bits.slice(1) };
+}
+
+async function resolvePytestNodeId(ref: string): Promise<vscode.Location[] | undefined> {
+  const { pyPathOrDotted, trail } = parsePytestNodeId(ref);
+
+  // path-like?
+  if (pyPathOrDotted.endsWith('.py')) {
+    const matches = await vscode.workspace.findFiles(`**/${pyPathOrDotted.replace(/^\.?\/?/, '')}`);
+    if (matches.length === 0) return undefined;
+    const uri = matches[0];
+    const doc = await vscode.workspace.openTextDocument(uri);
+    // Drill into ::Class::test_method if present
+    let pos: vscode.Position | undefined;
+    for (const name of trail) {
+      pos = await findSymbolLine(doc, name) ?? pos;
+    }
+    const range = new vscode.Range(pos ?? new vscode.Position(0, 0), pos ?? new vscode.Position(0, 0));
+    return [new vscode.Location(uri, range)];
   }
 
-  // Tree-safe: no href; programmatic command navigation
-  const handleClick: React.MouseEventHandler = (e) => {
-    e.preventDefault();
-    e.stopPropagation(); // don't let <vscode-tree-item> treat this as a row toggle
-    onActivate?.();
-    (window as any).location.href = cmd; // VS Code intercepts if enableCommandUris: true
-  };
+  // dotted tests.test_mod.Class.test_fn
+  const { module, symbol } = splitDotted(pyPathOrDotted);
+  const uris = await resolveDottedModuleToUris(module);
+  if (uris.length === 0) return undefined;
+  const uri = uris[0];
+  const doc = await vscode.workspace.openTextDocument(uri);
 
-  const handleKeyDown: React.KeyboardEventHandler = (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).click();
-    }
-  };
-
-  return (
-    <span
-      role="link"
-      tabIndex={0}
-      title={tooltip}
-      className={className}
-      onPointerDown={(e) => e.stopPropagation()} // extra guard vs. row toggle
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-    >
-      {label}
-    </span>
-  );
+  // Use last element in dotted path if not provided via ::trail
+  const targets = [...trail, symbol].filter(Boolean) as string[];
+  let pos: vscode.Position | undefined;
+  for (const name of targets) {
+    pos = await findSymbolLine(doc, name) ?? pos;
+  }
+  return [new vscode.Location(uri, pos ?? new vscode.Position(0, 0))];
 }
 
-=========================================
+async function resolveDotted(ref: string): Promise<vscode.Location[] | undefined> {
+  const { module, symbol } = splitDotted(ref);
+  const uris = await resolveDottedModuleToUris(module);
+  if (uris.length === 0) return undefined;
 
-Refactors to <vscode-tree> / <vscode-tree-item>
+  // Prefer first hit; if multiple, return all.
+  const locs: vscode.Location[] = [];
+  for (const uri of uris) {
+    const doc = await vscode.workspace.openTextDocument(uri);
+    if (symbol) {
+      const pos = await findSymbolLine(doc, symbol);
+      locs.push(new vscode.Location(uri, pos ?? new vscode.Position(0, 0)));
+    } else {
+      locs.push(new vscode.Location(uri, new vscode.Position(0, 0)));
+    }
+  }
+  return locs;
+}
 
-Leaves the row title for expand/collapse (double-click or twistie)
+export class DocstringDefinitionProvider implements vscode.DefinitionProvider, vscode.DocumentLinkProvider, vscode.HoverProvider {
+  constructor(private proxy: ProxyManager) {}
 
-Adds a trailing “Copy” icon button on each group row that:
+  async provideDefinition(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Definition | undefined> {
+    if (!(inTripleQuotedString(document, position) || inComment(document, position))) return;
 
-copies all initials for the group (via extension message → command)
+    const rng = wordRangeAt(document, position);
+    if (!rng) return;
+    const ref = document.getText(rng);
 
-appends initials to the Comments tab through your existing onClickGroupLink callback
+    // 1) Try local heuristics
+    const tryLocal = async () => {
+      if (PYTEST_NODEID.test(ref)) return (await resolvePytestNodeId(ref)) ?? undefined;
+      if (DOTTED_REF.test(ref)) return (await resolveDotted(ref)) ?? undefined;
+      return undefined;
+    };
+    const local = await tryLocal();
+    if (local && local.length) return local;
 
-shows the “Copied to clipboard” toast (from the extension)
+    // 2) Optional: ask backend (when connected) for smarter resolution
+    if (this.proxy.state === ProxyProcessState.Connected) {
+      try {
+        const payload = await this.proxy.rpc('nav.resolveSymbol', {
+          filename: document.uri.fsPath,
+          reference: ref,
+          workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath),
+        });
+        if (payload?.uri) {
+          const uri = vscode.Uri.file(payload.uri);
+          const pos = new vscode.Position(payload.line ?? 0, payload.character ?? 0);
+          return [new vscode.Location(uri, pos)];
+        }
+      } catch (e) {
+        // no-op; fall through to undefined
+      }
+    }
+    // 3) Nothing found -> undefined (VS Code will show “No definition found”)
+    return;
+  }
 
-This avoids the CSP “frame-src” blank page entirely and keeps your current review summary integration. (Built from the file you shared. 
-)
+  provideDocumentLinks(document: vscode.TextDocument): vscode.DocumentLink[] | undefined {
+    // Make refs clickable inside docstrings/comments
+    const links: vscode.DocumentLink[] = [];
+    const text = document.getText();
+    for (const m of text.matchAll(new RegExp(`${PYTEST_NODEID.source}|${DOTTED_REF.source}`, 'g'))) {
+      const start = document.positionAt(m.index ?? 0);
+      const end = document.positionAt((m.index ?? 0) + m[0].length);
+      // Only turn into link if inside docstring or comment
+      const mid = new vscode.Position(start.line, start.character + 1);
+      if (!(inTripleQuotedString(document, mid) || inComment(document, mid))) continue;
+      // Use command: URI so link reuses our DefinitionProvider
+      const cmdUri = vscode.Uri.parse(`command:editor.action.revealDefinition`);
+      const link = new vscode.DocumentLink(new vscode.Range(start, end), cmdUri);
+      links.push(link);
+    }
+    return links;
+  }
 
+  async provideHover(document: vscode.TextDocument, position: vscode.Position) {
+    const rng = wordRangeAt(document, position);
+    if (!rng || !(inTripleQuotedString(document, position) || inComment(document, position))) return;
+    const ref = document.getText(rng);
+    const md = new vscode.MarkdownString();
+    md.isTrusted = true;
+    md.appendMarkdown(`**Reference:** \`${ref}\`\n\n[Go to definition](command:editor.action.revealDefinition)`);
+    return new vscode.Hover(md, rng);
+  }
+}
 
-
-
+export function registerDocstringRefProviders(context: vscode.ExtensionContext, proxy: ProxyManager) {
+  const selector = { language: 'python', scheme: 'file' };
+  context.subscriptions.push(
+    vscode.languages.registerDefinitionProvider(selector, new DocstringDefinitionProvider(proxy)),
+    vscode.languages.registerDocumentLinkProvider(selector, new DocstringDefinitionProvider(proxy)),
+    vscode.languages.registerHoverProvider(selector, new DocstringDefinitionProvider(proxy)),
+  );
+}

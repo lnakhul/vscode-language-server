@@ -145,3 +145,109 @@ export const SrcdbView: React.FC<SrcdbViewProps> = ({ modules }) => {
   if (!modules) return null;
   return <ModuleTree modules={modules} />;
 };
+
+
+==============================••••==============••=•
+// src/webview/srcdb.tsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVscodeExtensionContext } from '../components/VsCodeExtensionContext'; // you already have this
+
+type SrcdbModule = {
+  label: string;
+  path: string;
+  isDirectory: boolean;
+  children?: SrcdbModule[];
+};
+
+type Props = { initialModules: SrcdbModule[] };
+
+export const SrcdbTree: React.FC<Props> = ({ initialModules }) => {
+  const vscodeApi = useVscodeExtensionContext();
+  const treeRef = useRef<HTMLElement | null>(null);
+
+  // expansion & children caches
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [childrenMap, setChildrenMap] = useState<Record<string, SrcdbModule[]>>({});
+
+  // selection
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
+  const ensureChildrenLoaded = useCallback(async (path: string) => {
+    if (childrenMap[path]) return;
+    const childList = await vscodeApi.invoke<SrcdbModule[]>('loadChildren', path);
+    setChildrenMap(prev => ({ ...prev, [path]: childList ?? [] }));
+  }, [childrenMap, vscodeApi]);
+
+  // Handle native tree events from the web component
+  useEffect(() => {
+    const el = treeRef.current;
+    if (!el) return;
+
+    const onToggle = async (ev: Event) => {
+      // most builds emit a CustomEvent with the toggled item in ev.target or ev.detail.item
+      const item = ev.target as HTMLElement;
+      const path = item?.getAttribute('data-path');
+      if (!path) return;
+
+      const nowExpanded = item.hasAttribute('expanded');
+      setExpanded(prev => ({ ...prev, [path]: nowExpanded }));
+      if (nowExpanded) {
+        await ensureChildrenLoaded(path);
+      }
+    };
+
+    const onSelect = (ev: Event) => {
+      const item = ev.target as HTMLElement;
+      const path = item?.getAttribute('data-path');
+      if (!path) return;
+      setSelectedPath(path);
+      // optional: notify extension
+      // vscodeApi.postMessage({ type: 'srcdb.select', path });
+    };
+
+    // Library event names (most versions):
+    el.addEventListener('vsc-toggle', onToggle as EventListener);
+    el.addEventListener('vsc-select', onSelect as EventListener);
+
+    // Safety fallbacks for older builds that use generic events:
+    el.addEventListener('toggle', onToggle as EventListener);
+    el.addEventListener('click', onSelect as EventListener);
+
+    return () => {
+      el.removeEventListener('vsc-toggle', onToggle as EventListener);
+      el.removeEventListener('vsc-select', onSelect as EventListener);
+      el.removeEventListener('toggle', onToggle as EventListener);
+      el.removeEventListener('click', onSelect as EventListener);
+    };
+  }, [ensureChildrenLoaded]);
+
+  // Render one tree item recursively
+  const TreeItem: React.FC<{ node: SrcdbModule; level: number }> = ({ node, level }) => {
+    const hasChildren = node.isDirectory && (childrenMap[node.path]?.length ?? 0) > 0;
+    const isOpen = !!expanded[node.path];
+
+    return (
+      <vscode-tree-item
+        data-path={node.path}
+        expanded={isOpen || undefined}
+        selected={selectedPath === node.path || undefined}
+        aria-level={level}
+      >
+        {node.label}
+        {/* children go inside as nested <vscode-tree-item> */}
+        {hasChildren && childrenMap[node.path]!.map(child => (
+          <TreeItem key={child.path} node={child} level={level + 1} />
+        ))}
+      </vscode-tree-item>
+    );
+  };
+
+  // First render: show top-level modules; child branches render after expansion
+  return (
+    <vscode-tree ref={treeRef as any} style={{ height: '100%', overflow: 'auto' }}>
+      {initialModules.map(m => (
+        <TreeItem key={m.path} node={m} level={1} />
+      ))}
+    </vscode-tree>
+  );
+};

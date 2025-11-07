@@ -1,3 +1,28 @@
+const renderMethod = (method: TestResultState, parentKey: string) => {
+  const { success, state, moduleName, duration, lineno, name } = method;
+  const icon = testStateIcon(state, success);
+  const formattedDuration = formatDurationFromSeconds(duration);
+  const key = `${parentKey}.${name}`;
+
+  const openTestFile = async () => {
+    await onFileOpen(moduleName, lineno);
+  };
+
+  return (
+    <vscode-tree-item key={key} id={key} aria-label={name} data-key={key}>
+      <div className="treeItemRow">
+        {icon}
+        <TreeMethodLink label={name} onClick={openTestFile} />
+        <span className="duration">{formattedDuration}</span>
+      </div>
+    </vscode-tree-item>
+  );
+};
+
+===================================================================================
+
+
+
 const TestResultsTree: React.FC<{ results: GroupedTestResults }> = ({ results }) => {
   const { onFileOpen } = useContext<TestRunState>(TestRunData);
   const { expansionStates, onUpdateExpansionStates } = useContext<TestExpansionState>(TestsExpansionStatesContext);

@@ -1,23 +1,28 @@
-const renderMethod = (method: TestResultState, parentKey: string) => {
-  const { success, state, moduleName, duration, lineno, name } = method;
-  const icon = testStateIcon(state, success);
-  const formattedDuration = formatDurationFromSeconds(duration);
-  const key = `${parentKey}.${name}`;
+import React, { useEffect, useRef } from 'react';
 
-  const openTestFile = async () => {
-    await onFileOpen(moduleName, lineno);
-  };
+const TreeMethodLink: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => {
+  const ref = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // use real DOM listener because we’re inside a web component
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [onClick]);
 
   return (
-    <vscode-tree-item key={key} id={key} aria-label={name} data-key={key}>
-      <div className="treeItemRow">
-        {icon}
-        <TreeMethodLink label={name} onClick={openTestFile} />
-        <span className="duration">{formattedDuration}</span>
-      </div>
-    </vscode-tree-item>
+    <span
+      ref={ref}
+      className="treeItemLabel methodLink"
+      style={{ cursor: 'pointer' }}
+      title="Go to test location in current environment"
+    >
+      {label}
+    </span>
   );
 };
+
 
 ===================================================================================
 

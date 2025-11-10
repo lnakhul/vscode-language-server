@@ -117,33 +117,34 @@ const ApproverGroupTree: React.FC<ApproverListProps> = ({
         }
     };
 
-    return (
-        <vscode-tree-item 
-            open={isExpanded}
-        >
-            <div 
-                slot="label" 
-                style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                onClick={handleLabelClick}
-            >
-                {onSelectGroup && (
-                    <vscode-checkbox 
-                        checked={checked} 
-                        onClick={onToggleGroupChecked}
-                        style={{ marginRight: '8px' }}
-                    />
-                )}
-                {createCopyLink(roleName, initials, tooltip)}
-            </div>
-            {approvers.map((approver, index) => (
-                <ApproverTreeItem 
-                    key={`approver_item_${group.roleName}_${approver.username}_${index}`}
-                    approver={approver}
-                    isApproverSelectable={false}
-                    isApproverSelected={selected.has(approver.username)}
-                />
-            ))}
-        </vscode-tree-item>
+    // Create label element with slot attribute using createElement
+    const labelElement = createElement(
+        'div',
+        {
+            slot: 'label',
+            style: { display: 'flex', alignItems: 'center', cursor: 'pointer' },
+            onClick: handleLabelClick
+        },
+        onSelectGroup && createElement('vscode-checkbox', {
+            checked: checked,
+            onClick: onToggleGroupChecked,
+            style: { marginRight: '8px' }
+        }),
+        createCopyLink(roleName, initials, tooltip)
+    );
+
+    return createElement(
+        'vscode-tree-item',
+        { open: isExpanded },
+        labelElement,
+        ...approvers.map((approver, index) => 
+            createElement(ApproverTreeItem, {
+                key: `approver_item_${group.roleName}_${approver.username}_${index}`,
+                approver: approver,
+                isApproverSelectable: false,
+                isApproverSelected: selected.has(approver.username)
+            })
+        )
     );
 };
 

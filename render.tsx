@@ -105,28 +105,26 @@ const ApproverGroupTree: React.FC<ApproverListProps> = ({
         onSelectGroup?.(group, !checked);
     };
 
-    const handleGroupClick = (evt: React.MouseEvent) => {
-        // Handle the copy link click
+    const handleLabelClick = (evt: React.MouseEvent) => {
+        evt.stopPropagation();
         const target = evt.target as HTMLElement;
-        if (target.tagName === 'A') {
+        // If clicking the link itself, trigger the group click
+        if (target.tagName === 'A' || target.closest('a')) {
             onClickGroupLink?.(group);
+        } else {
+            // Otherwise toggle expansion
+            setIsExpanded(!isExpanded);
         }
-    };
-
-    const handleTreeItemClick = (evt: CustomEvent) => {
-        // Toggle expansion when clicking the tree item
-        setIsExpanded(!isExpanded);
     };
 
     return (
         <vscode-tree-item 
             open={isExpanded}
-            onClick={handleTreeItemClick as any}
         >
             <div 
                 slot="label" 
                 style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                onClick={handleGroupClick}
+                onClick={handleLabelClick}
             >
                 {onSelectGroup && (
                     <vscode-checkbox 
@@ -137,7 +135,7 @@ const ApproverGroupTree: React.FC<ApproverListProps> = ({
                 )}
                 {createCopyLink(roleName, initials, tooltip)}
             </div>
-            {isExpanded && approvers.map((approver, index) => (
+            {approvers.map((approver, index) => (
                 <ApproverTreeItem 
                     key={`approver_item_${group.roleName}_${approver.username}_${index}`}
                     approver={approver}

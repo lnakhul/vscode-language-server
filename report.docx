@@ -1,61 +1,7 @@
-VS Code & QzDev Startup Time Analysis
-(QzDesktop vs Direct Launch)
-Date: 2025-10-02
-TL;DR
-VS Code via QzDesktop (cold): p50 167.3s (2:47.30), p95 178.02s (2:58.02), n=5.
-QzDev via QzDesktop (cold): p50 71.56s (1:11.56), p95 99.69s (1:39.69), n=5.
-VS Code via QzDesktop (warm): p50 90.4s (1:30.40), p95 90.97s (1:30.97), n=5.
-VS Code direct (warm): p50 90.4s (1:30.40), p95 90.97s (1:30.97), n=5.
-Baseline (direct, --disable-extensions, warm): p50 8.25s (0:08.25), p95 9.22s (0:09.22), n=5.
+So we have a custom vscode extension with several major functionality for developers. We work at Bank of America, where everything is built in-house, so we build a custom extension that integrates with our Sandra database.  We have several custom keyboard shortcut keys and would like to provide a page for users to reference, showing these keyboard shortcuts. This page will be constantly updated so it should be automatically sync from the package.json file. This will be a webview page. Currently we have the extension side of the code which typescript and then we have a webview side in react. We want the page to be similar to that of default vscode "Preferences: Open Keyboard Shortcut" page. It has a search filed to search commands, and four columns in table (Command, Keybinding, When, Source(We could change this to descition since it will be one sourc)). For the table we have the vscode elements library imported so we can use the table component https://vscode-elements.github.io/components/table/#resizable-columns. These are some features that I came up with but if add whatever elese you feel will be best and more advance to have a complete implementation:
 
-Cold→Warm penalty (VS Code via QzDesktop): +76.9s.
-Runtime overhead vs app baseline (warm VS Code): +82.15s.
-QzDev vs VS Code (cold): −95.74s (QzDev faster).
-Scenarios
-VS Code via QzDesktop (cold & warm)
-QzDev via QzDesktop (cold)
-VS Code direct from desktop (warm)
-VS Code baseline (--disable-extensions) direct from desktop (warm)
-Milestones (Readiness Definition)
-M0: Launch button clicked (QzDesktop) or desktop icon executed
-M1: Process spawned
-M2: Main window visible
-M3: Extension Host started
-M4: Quartz extension activated
-M5: Proxy connected & Sandra handshake complete (dev-ready)
-Environment & Method
-Location / Network: office
-Machine: VMware7.1; Intel Xeon Gold 6240 @ 2.60GHz; 16GB RAM; VMware Virtual SCSI Disk (~800GB)
-Image/Profile: standard corporate desktop image (C:\Users\zkpbx1j)
-VS Code: 1.93.3; QzDev: Latest; Quartz extension: 2025-09-23
-Extensions enabled: Quartz + standard set; baseline uses --disable-extensions
-Runs: 5 per scenario; report p50 (median) and p95 (PERCENTILE.INC)
-Timing: manual stopwatch to proxy connected / qzenv ready; VS Code Startup Performance panel available; Quartz startup logs can split segments (not yet included)
-Results (comparison table)
-
-Key findings
-Launcher vs runtime: cold launches via QzDesktop add ~+76.9s vs warm.
-Runtime cost dominates warm path: warm VS Code is ~+82.15s slower than the app baseline — extension activation + proxy/Sandra connect.
-QzDev is lighter on cold: median 71.56s, ~95.74s faster than VS Code cold.
-Warm QzDesktop vs warm direct are similar totals (~90.4s), indicating the primary bottleneck is runtime once warm.
-Recommendations (ranked)
-Defer non-critical Quartz initialization to post-ready (after M5) and batch early RPCs into a single bootstrap call (expected win: 10–25s).
-Reduce proxy/Sandra handshake latency: cache session where policy allows; parallelize independent probes; eliminate redundant discovery (expected win: 10–20s).
-Review QzDesktop service gating (cold path): start VS Code in parallel with non-critical services (expected win: 30–60s).
-Next steps
-Add Quartz [startup] marks for activation, proxy_connect, and dev_ready_total to split M2→M4→M5.
-Re-run 5 trials per scenario; update the table with segment medians and p95.
-A/B the top fix (e.g., deferred init) and report delta vs current p50/p95.
-Appendix A — Raw runs (stopwatch)
-VS Code via QzDesktop (cold) — Launch → qzenv/proxy connect (Total):
-2:56.25, 2:47.30, 2:28.47, 2:58.46, 2:14.28
-QzDev via QzDesktop (cold) — Launch → fully started (Total):
-1:46.35, 1:11.47, 1:11.56, 1:11.28, 1:13.03
-VS Code via QzDesktop (warm) — Launch → qzenv/proxy connect (Total):
-1:29.12, 1:22.55, 1:31.07, 1:30.56, 1:30.40
-VS Code direct (warm) — Launch → qzenv/proxy connect (Total):
-1:29.12, 1:22.55, 1:31.07, 1:30.56, 1:30.40
-VS Code baseline (--disable-extensions, warm) — Launch → window visible (M0→M2):
-0:08.15, 0:09.45, 0:08.25, 0:08.20, 0:08.30
-Appendix B — Calculation notes
-Median (p50) = MEDIAN(range); p95 = PERCENTILE.INC(range, 0.95). Times recorded in seconds; tables also show mm:ss.cc for readability.
+Dynamic updates: Can automatically refresh when shortcuts change
+Rich formatting: Better styling and interactivity than markdown
+Search/filter: Easy to add search functionality for large shortcut lists
+Consistency: Can match your bank's design system
+Live data: Reads directly from package.json, no manual updates needed

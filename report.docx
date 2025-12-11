@@ -1,7 +1,47 @@
-So we have a custom vscode extension with several major functionality for developers. We work at Bank of America, where everything is built in-house, so we build a custom extension that integrates with our Sandra database.  We have several custom keyboard shortcut keys and would like to provide a page for users to reference, showing these keyboard shortcuts. This page will be constantly updated so it should be automatically sync from the package.json file. This will be a webview page. Currently we have the extension side of the code which typescript and then we have a webview side in react. We want the page to be similar to that of default vscode "Preferences: Open Keyboard Shortcut" page. It has a search filed to search commands, and four columns in table (Command, Keybinding, When, Source(We could change this to descition since it will be one sourc)). For the table we have the vscode elements library imported so we can use the table component https://vscode-elements.github.io/components/table/#resizable-columns. These are some features that I came up with but if add whatever elese you feel will be best and more advance to have a complete implementation:
 
-Dynamic updates: Can automatically refresh when shortcuts change
-Rich formatting: Better styling and interactivity than markdown
-Search/filter: Easy to add search functionality for large shortcut lists
-Consistency: Can match your bank's design system
-Live data: Reads directly from package.json, no manual updates needed
+Implement support for file operations (open, rename, create, delete) in the Srcdb webview tree component.
+
+Context:
+- This is for the Quartz VSCode extension.
+- The Srcdb webview displays a tree of modules, folders, and files retrieved from Sandra DB.
+- The left column acts as a navigation menu; selecting a module displays its folders/files.
+- We need the webview tree to behave similarly to the VSCode file explorer, but using our custom proxy + Sandra APIs.
+
+Requirements:
+1. Enable right-click context menu actions for:
+   - Open file
+   - Rename file/folder
+   - Delete file/folder
+   - Create new file
+   - Create new folder
+
+2. For each action, call the appropriate Sandra DB endpoint via the existing proxy APIs:
+   - Use `SourceLocator` + `ProxyManager` for backend communication.
+   - Validate staging area ownership before mutating any file.
+   - Ensure correct error handling and notification messages.
+
+3. After each mutation:
+   - Refresh only the affected subtree if possible.
+   - Otherwise fall back to reloading the full module tree.
+
+4. UI requirements:
+   - Use `<vscode-tree>` and `<vscode-tree-item>` components.
+   - Preserve expand/collapse state when refreshing.
+   - Ensure the tree renders correctly for nested folder structures at any depth.
+
+5. Code architecture:
+   - Put all webview logic inside the existing Srcdb React component.
+   - Add message handlers in `srcdbViewProvider.ts` to receive commands from the webview and call proxy APIs.
+   - Use the existing bi-directional postMessage contract.
+
+6. Acceptance Criteria (from JIRA):
+   - A user viewing the Srcdb webview can perform file operations from the tree.
+   - The left column navigates modules and their children.
+   - All operations correctly update Sandra DB and reflect in the UI.
+
+Please generate:
+- React code for the tree including context menus.
+- Message passing handlers for each tree action.
+- Updates to the extension host to call Sandra APIs.
+- Helper utilities for refreshing subtrees cleanly.
+- TypeScript code only, no placeholders—produce runnable and idiomatic Quartz extension code.

@@ -1,47 +1,89 @@
+Title
 
-Implement support for file operations (open, rename, create, delete) in the Srcdb webview tree component.
+Add Quartz Backend Impact Intelligence for Python Developers
 
-Context:
-- This is for the Quartz VSCode extension.
-- The Srcdb webview displays a tree of modules, folders, and files retrieved from Sandra DB.
-- The left column acts as a navigation menu; selecting a module displays its folders/files.
-- We need the webview tree to behave similarly to the VSCode file explorer, but using our custom proxy + Sandra APIs.
+Short Description
 
-Requirements:
-1. Enable right-click context menu actions for:
-   - Open file
-   - Rename file/folder
-   - Delete file/folder
-   - Create new file
-   - Create new folder
+Add a Quartz-aware backend impact analysis feature to the VS Code extension for developers writing Python backend code in Quartz/Sandra-backed source workflows. The feature will analyze Python files and changes to identify symbols, imports, Sandra access patterns, Quartz source/train context, risk indicators, recommended tests, and validation steps without executing backend code. The implementation will be delivered in phases within one PR, with each phase separated by commit.
 
-2. For each action, call the appropriate Sandra DB endpoint via the existing proxy APIs:
-   - Use `SourceLocator` + `ProxyManager` for backend communication.
-   - Validate staging area ownership before mutating any file.
-   - Ensure correct error handling and notification messages.
+⸻
 
-3. After each mutation:
-   - Refresh only the affected subtree if possible.
-   - Otherwise fall back to reloading the full module tree.
+Acceptance Criteria
 
-4. UI requirements:
-   - Use `<vscode-tree>` and `<vscode-tree-item>` components.
-   - Preserve expand/collapse state when refreshing.
-   - Ensure the tree renders correctly for nested folder structures at any depth.
+Scenario 1: Analyze Python backend files
 
-5. Code architecture:
-   - Put all webview logic inside the existing Srcdb React component.
-   - Add message handlers in `srcdbViewProvider.ts` to receive commands from the webview and call proxy APIs.
-   - Use the existing bi-directional postMessage contract.
+Given a developer has a Python file open in a Quartz workspace
+When they run Quartz: Analyze Backend Impact
+Then the extension should generate a structured backend impact report for the active file.
 
-6. Acceptance Criteria (from JIRA):
-   - A user viewing the Srcdb webview can perform file operations from the tree.
-   - The left column navigates modules and their children.
-   - All operations correctly update Sandra DB and reflect in the UI.
+Scenario 2: Detect Python symbols and imports
 
-Please generate:
-- React code for the tree including context menus.
-- Message passing handlers for each tree action.
-- Updates to the extension host to call Sandra APIs.
-- Helper utilities for refreshing subtrees cleanly.
-- TypeScript code only, no placeholders—produce runnable and idiomatic Quartz extension code.
+Given a Python file contains classes, functions, methods, and imports
+When backend impact analysis runs
+Then the report should identify detected symbols, the current symbol near the cursor, and imported modules.
+
+Scenario 3: Detect Sandra access patterns
+
+Given Python code contains Sandra operations such as db.readobj, db.read_or_new, obj.write, sandra.nameRange, or sandra.walk
+When backend impact analysis runs
+Then the report should classify those operations as reads, writes, traversals, creates, updates, or unknown operations.
+
+Scenario 4: Flag risky backend operations
+
+Given Python code contains write, delete, rename, move, clear, overwrite, or update-style operations
+When backend impact analysis runs
+Then the report should include risk warnings and suggested validation steps.
+
+Scenario 5: Resolve Quartz source context
+
+Given a Python file is opened from a Quartz Source Cache or related Quartz workspace path
+When backend impact analysis runs
+Then the report should include source context such as workspace path, source-cache status, train/stage/source layer where available, and context resolution warnings where unavailable.
+
+Scenario 6: Expose analysis in editor workflow
+
+Given a supported Python file is open
+When the file contains supported classes or functions
+Then CodeLens and/or editor context menu actions should allow the developer to run backend impact analysis from the editor.
+
+Scenario 7: Recommend tests
+
+Given a Python file or symbol is analyzed
+When related tests can be inferred
+Then the report should list recommended test files and explain why they were selected.
+
+Scenario 8: Generate test scaffold
+
+Given a developer selects a function, method, class, or file
+When they run Quartz: Generate Python Test Scaffold
+Then the extension should generate a pytest-style scaffold without overwriting existing tests without confirmation.
+
+Scenario 9: Display structured webview report
+
+Given backend impact analysis completes
+When the report is shown
+Then it should display a readable structured report with current file, symbol, Quartz context, imports, Sandra access, risk score, warnings, recommended tests, and validation checklist.
+
+Scenario 10: Support import resolution
+
+Given a Python file contains local/project imports
+When backend impact analysis runs
+Then the extension should attempt to resolve imports against the current workspace/source context and warn on unresolved or ambiguous imports.
+
+Scenario 11: Analyze current changes
+
+Given the workspace contains modified Python files
+When the developer runs Quartz: Analyze Backend Impact for Current Changes
+Then the extension should generate an aggregate report focused on changed Python files and changed symbols where detectable.
+
+Scenario 12: Preserve safety
+
+Given any backend impact analysis command runs
+When analysis is performed
+Then the extension must not execute backend Python code, mutate Sandra data, modify source cache content, or perform destructive operations.
+
+Scenario 13: Handle unsupported cases gracefully
+
+Given there is no active editor, a non-Python file is active, no workspace is open, or context cannot be resolved
+When backend impact analysis runs
+Then the extension should show a clear message or report warning instead of failing.

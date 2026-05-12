@@ -1,4 +1,4 @@
-We are implementing a single Jira ticket and one PR for a new Quartz VS Code extension feature called “Quartz Backend Impact Intelligence.”
+No We are implementing a single Jira ticket and one PR for a new Quartz VS Code extension feature called “Quartz Backend Impact Intelligence.”
 
 This work should be implemented in multiple logical phases, with each phase kept clean enough to be committed separately.
 
@@ -79,3 +79,51 @@ Implement this across phases/commits:
 8. Change-aware backend impact analysis
 
 Do not implement everything in one giant file. Create modular files under a feature folder such as src/backendImpact/.
+
+
+
+==================================
+
+The current Backend Impact CodeLens implementation opens static markdown reports when clicking Analyze Impact, Trace Sandra Access, Recommend Tests, and Generate Test. This is a good start, but we need to make the feature more editor-focused and symbol-aware.
+
+Please update the implementation so that each CodeLens action is scoped to the function, method, or class where the CodeLens appears. When the user clicks a CodeLens action, pass the file path, symbol name, symbol type, start line, end line, and cursor context into the analyzer.
+
+Requirements:
+
+1. Symbol-specific reports:
+   - Analyze Impact should focus on the selected symbol first, then include file-level context below.
+   - Trace Sandra Access should only show Sandra operations inside the selected symbol when possible.
+   - Recommend Tests should generate recommendations for the selected symbol, not only the whole file.
+   - Generate Test should generate a pytest scaffold for the selected symbol.
+
+2. Clickable source navigation:
+   - Any report entry that references a function, class, import, Sandra operation, or line number should provide a clickable link or command that opens the original Python file at that line.
+   - Reuse existing Quartz URI/deep-link helpers if available.
+   - If command links are not safe/supported in markdown, add extension commands to open file locations from report entries.
+
+3. Sandra access classification:
+   - Improve Sandra access output from generic query lines into classified operations.
+   - Classify operations as read, write, create/update, traversal, external service call, or unknown.
+   - Include confidence level, containing symbol, line number, expression text, and risk level.
+   - Treat patterns such as obj.write(), saveOnMessageObject(...), save*Object(...), readobj(...), read_or_new(...), sandra.nameRange(...), sandra.walk(...), delete/remove/rename/move/clear/overwrite/update as relevant backend persistence operations.
+
+4. Recommended tests:
+   - Recommend existing related test files if found.
+   - If no test file is found, suggest a likely test file name and path.
+   - Suggest concrete pytest test case names based on the selected function.
+   - Include reasons for each recommendation.
+
+5. Generate Test:
+   - Generate a pytest scaffold in a new unsaved editor or insert into a selected test file only after confirmation.
+   - Do not overwrite existing tests silently.
+   - Include TODOs for arranging inputs, mocking Sandra/backend dependencies, calling the selected function, and asserting expected behavior.
+   - If Sandra operations are detected, include TODOs for Sandra mocks and write assertions.
+
+6. Safety:
+   - Do not execute backend Python code.
+   - Do not query or mutate Sandra automatically.
+   - Live Sandra inspection can be added later as an explicit action only.
+
+7. UX:
+   - Markdown reports are acceptable for now, but they must be actionable, symbol-scoped, and clickable.
+   - Avoid generating giant file-level reports when the user clicked CodeLens on a specific function.

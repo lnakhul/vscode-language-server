@@ -48,6 +48,26 @@ Expected report sections:
 - Recommended Tests
 - Validation Checklist
 
+Editor UX requirement:
+Add a CodeLens-style experience for supported Python files.
+
+When a developer opens a Python backend file, the extension should show CodeLens actions above detected classes, functions, and methods where appropriate.
+
+The initial CodeLens actions should include:
+- Quartz: Analyze Impact
+- Quartz: Trace Sandra Access
+- Quartz: Recommend Tests
+- Quartz: Generate Test
+
+The CodeLens actions should:
+- Run analysis for the current file and selected symbol
+- Pass file path, line number, and symbol name into the analyzer
+- Avoid excessive clutter in large files
+- Be configurable through a setting such as quartz.backendImpact.enableCodeLens
+- Never execute backend Python code or mutate Sandra/source state
+
+The CodeLens feature should not duplicate Go to Definition, References, or Call Hierarchy. It should provide Quartz-specific backend impact analysis, Sandra access tracing, and validation guidance.
+
 Implement this across phases/commits:
 1. Backend impact framework and Python scanner
 2. Sandra access detection

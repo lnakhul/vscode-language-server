@@ -1,129 +1,149 @@
-No We are implementing a single Jira ticket and one PR for a new Quartz VS Code extension feature called “Quartz Backend Impact Intelligence.”
+The current Backend Impact CodeLens implementation opens generated Markdown files when clicking Analyze Impact, Trace Sandra Access, Recommend Tests, or Generate Test. This is too static.
 
-This work should be implemented in multiple logical phases, with each phase kept clean enough to be committed separately.
-
-Context:
-- The extension is built in TypeScript and supports developers working in Quartz/Sandra-backed source workflows.
-- Quartz users primarily write Python backend/service code for various trains on the Quartz platform and Sandra DB.
-- Existing context menu features already include Go to Definition, Find References, Call Hierarchy, Run Selection in Quartz Shell, Run Quartz Module, and Generate Docstring.
-- This new feature must not duplicate those existing navigation or execution features.
-- The feature should provide deeper Quartz-specific backend coding intelligence.
+Please refactor this into an interactive Backend Impact webview/workbench.
 
 Goal:
-Help developers answer:
-- What Python symbols exist in this file?
-- What imports and dependencies does this code use?
-- What Sandra DB operations does this code read/write/list?
-- What Quartz source/train/stage context am I editing in?
-- Are imports resolving from the expected source layer?
-- What risks exist if I change this code?
-- What tests should I run?
-- What validation steps should I follow?
-
-Important constraints:
-- Do not execute backend Python code during analysis.
-- Do not mutate Sandra, source cache, staging areas, or user files except when the user explicitly applies a generated test scaffold.
-- Keep analysis static/read-only.
-- Avoid expensive scans on every keystroke.
-- Reuse existing Quartz extension helpers where available, including source cache helpers, URI/path utilities, command registration patterns, logging, disposables, and webview conventions.
-- Keep implementation modular and avoid coupling the analyzer directly to UI rendering.
-- Follow existing Quartz coding conventions.
-
-User-facing commands:
-- Quartz: Analyze Backend Impact
-- Quartz: Trace Sandra Access
-- Quartz: Recommend Tests for Current File
-- Quartz: Generate Python Test Scaffold
-- Quartz: Analyze Backend Impact for Current Changes
-
-Expected report sections:
-- Current File
-- Current Symbol
-- Quartz Context
-- Python Symbols
-- Imports
-- Import Resolution
-- Sandra Access Summary
-- Risk Warnings
-- Recommended Tests
-- Validation Checklist
-
-Editor UX requirement:
-Add a CodeLens-style experience for supported Python files.
-
-When a developer opens a Python backend file, the extension should show CodeLens actions above detected classes, functions, and methods where appropriate.
-
-The initial CodeLens actions should include:
-- Quartz: Analyze Impact
-- Quartz: Trace Sandra Access
-- Quartz: Recommend Tests
-- Quartz: Generate Test
-
-The CodeLens actions should:
-- Run analysis for the current file and selected symbol
-- Pass file path, line number, and symbol name into the analyzer
-- Avoid excessive clutter in large files
-- Be configurable through a setting such as quartz.backendImpact.enableCodeLens
-- Never execute backend Python code or mutate Sandra/source state
-
-The CodeLens feature should not duplicate Go to Definition, References, or Call Hierarchy. It should provide Quartz-specific backend impact analysis, Sandra access tracing, and validation guidance.
-
-Implement this across phases/commits:
-1. Backend impact framework and Python scanner
-2. Sandra access detection
-3. Quartz source/train context resolution
-4. CodeLens and editor context menu actions
-5. Test recommendation and scaffold generation
-6. Webview report with risk scoring
-7. Import resolution and source-layer ambiguity detection
-8. Change-aware backend impact analysis
-
-Do not implement everything in one giant file. Create modular files under a feature folder such as src/backendImpact/.
-
-
-
-==================================
-
-The current Backend Impact CodeLens implementation opens static markdown reports when clicking Analyze Impact, Trace Sandra Access, Recommend Tests, and Generate Test. This is a good start, but we need to make the feature more editor-focused and symbol-aware.
-
-Please update the implementation so that each CodeLens action is scoped to the function, method, or class where the CodeLens appears. When the user clicks a CodeLens action, pass the file path, symbol name, symbol type, start line, end line, and cursor context into the analyzer.
+When a user clicks any Backend Impact CodeLens action, open or reveal a single interactive webview panel titled “Quartz Backend Impact”. The webview should render a structured, clickable report for the selected Python symbol and file instead of only opening a .md file.
 
 Requirements:
 
-1. Symbol-specific reports:
-   - Analyze Impact should focus on the selected symbol first, then include file-level context below.
-   - Trace Sandra Access should only show Sandra operations inside the selected symbol when possible.
-   - Recommend Tests should generate recommendations for the selected symbol, not only the whole file.
-   - Generate Test should generate a pytest scaffold for the selected symbol.
+1. CodeLens behavior
+- Keep the existing CodeLens labels:
+  - Analyze Impact
+  - Trace Sandra Access
+  - Recommend Tests
+  - Generate Test
+- Clicking any CodeLens should call a command with symbol context:
+  - filePath
+  - workspaceRelativePath
+  - symbolName
+  - symbolType
+  - startLine
+  - endLine
+  - selected action
+- Do not open a Markdown file as the primary action.
+- Markdown should only be available through an Export Markdown action.
 
-2. Clickable source navigation:
-   - Any report entry that references a function, class, import, Sandra operation, or line number should provide a clickable link or command that opens the original Python file at that line.
-   - Reuse existing Quartz URI/deep-link helpers if available.
-   - If command links are not safe/supported in markdown, add extension commands to open file locations from report entries.
+2. Add webview panel
+Create a reusable webview panel, for example:
+- BackendImpactWebviewPanel
+- BackendImpactReportView.tsx if React webviews are used
+- backendImpactMessages.ts for message types
 
-3. Sandra access classification:
-   - Improve Sandra access output from generic query lines into classified operations.
-   - Classify operations as read, write, create/update, traversal, external service call, or unknown.
-   - Include confidence level, containing symbol, line number, expression text, and risk level.
-   - Treat patterns such as obj.write(), saveOnMessageObject(...), save*Object(...), readobj(...), read_or_new(...), sandra.nameRange(...), sandra.walk(...), delete/remove/rename/move/clear/overwrite/update as relevant backend persistence operations.
+The panel should have sections or tabs:
+- Overview
+- Quartz Context
+- Sandra Access
+- Imports
+- Recommended Tests
+- Validation Checklist
+- Raw Markdown / Export
 
-4. Recommended tests:
-   - Recommend existing related test files if found.
-   - If no test file is found, suggest a likely test file name and path.
-   - Suggest concrete pytest test case names based on the selected function.
-   - Include reasons for each recommendation.
+3. Symbol-specific analysis
+- Analyze the selected symbol first.
+- Only show Sandra access inside the selected symbol where possible.
+- Include file-level context below the selected-symbol section.
+- If symbol-specific filtering is not possible, clearly label the result as file-level analysis.
 
-5. Generate Test:
-   - Generate a pytest scaffold in a new unsaved editor or insert into a selected test file only after confirmation.
-   - Do not overwrite existing tests silently.
-   - Include TODOs for arranging inputs, mocking Sandra/backend dependencies, calling the selected function, and asserting expected behavior.
-   - If Sandra operations are detected, include TODOs for Sandra mocks and write assertions.
+4. Interactive code navigation
+In the webview, any file, symbol, import, Sandra operation, or test candidate should be clickable.
+Implement webview messages for:
+- openLocation(filePath, line, column?)
+- openFile(filePath)
+- revealSymbol(filePath, startLine)
+- openTestCandidate(filePath)
+- copyMarkdown()
+- exportMarkdown()
+- generateTestScaffold()
 
-6. Safety:
-   - Do not execute backend Python code.
-   - Do not query or mutate Sandra automatically.
-   - Live Sandra inspection can be added later as an explicit action only.
+Opening a location should open the original Python file at the exact line.
 
-7. UX:
-   - Markdown reports are acceptable for now, but they must be actionable, symbol-scoped, and clickable.
-   - Avoid generating giant file-level reports when the user clicked CodeLens on a specific function.
+5. Report content
+The Overview section should show:
+- focused symbol name
+- symbol type
+- line range
+- file/module name
+- risk level: low/medium/high
+- short summary
+
+The Quartz Context section should show:
+- workspace path
+- source cache path if detected
+- module path
+- train/stage/source layer if available
+- context warnings if unresolved
+
+The Sandra Access section should show:
+- operation type: read/write/create/update/delete/traversal/unknown
+- expression text
+- line number
+- containing symbol
+- confidence level
+- risk level
+- clickable source link
+
+Detect and classify patterns such as:
+- db.readobj(...)
+- db.read(...)
+- db.read_or_new(...)
+- obj.write()
+- sandra.nameRange(...)
+- sandra.walk(...)
+- save*Object(...)
+- saveOnMessageObject(...)
+- write/update/delete/remove/rename/move/clear/overwrite calls
+
+The Imports section should show:
+- internal/project imports
+- external imports
+- unresolved imports
+- clickable resolved import locations where available
+
+The Recommended Tests section should show:
+- existing candidate test files if found
+- suggested test file path if none found
+- suggested pytest test case names
+- reasons for each recommendation
+
+The Validation Checklist section should show actionable items:
+- review callers of selected symbol
+- confirm imported collaborators resolve in target runtime
+- run or add recommended tests
+- validate Sandra write/read behavior if detected
+- confirm source layer/train context
+- review error handling/logging around risky operations
+
+6. Generate Test action
+- Generate Test should not simply open a report.
+- It should generate a pytest scaffold for the selected symbol.
+- Open the scaffold in a new unsaved editor or ask the user to choose an existing test file.
+- Never overwrite existing tests silently.
+- Include TODOs for arranging inputs, mocking Sandra/backend dependencies, calling the selected function, and asserting expected behavior.
+
+7. Export Markdown
+- Add an Export Markdown button in the webview.
+- Export should create the markdown summary only when explicitly requested.
+- The generated markdown should match the webview content and include clickable source references where possible.
+
+8. Safety
+- Do not execute backend Python code.
+- Do not automatically query Sandra.
+- Do not mutate Sandra, source cache, or workspace files unless the user explicitly confirms generating/inserting a test scaffold.
+- Keep all backend impact analysis static/read-only.
+
+9. UX
+- Reuse existing webview CSP, nonce, styling, and message handling patterns from the Quartz extension.
+- Support dark/light themes.
+- Avoid giant wall-of-text reports.
+- Make the report scannable with cards, collapsible sections, or tabs.
+- Show empty states such as:
+  - No Sandra access detected in selected symbol
+  - No related tests found
+  - Quartz context could not be resolved
+  - Import resolution unavailable
+
+10. Backward compatibility
+- Existing analyzer/scanner modules should remain reusable.
+- The markdown report generator can remain, but it should be called only by Export Markdown.
+- The CodeLens command wiring should be updated to open the webview.

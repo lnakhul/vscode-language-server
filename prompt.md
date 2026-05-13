@@ -1,149 +1,88 @@
-The current Backend Impact CodeLens implementation opens generated Markdown files when clicking Analyze Impact, Trace Sandra Access, Recommend Tests, or Generate Test. This is too static.
+The Backend Impact webview now opens correctly from CodeLens and focuses the correct tab. The next improvement is to make the webview interactive instead of mostly read-only.
 
-Please refactor this into an interactive Backend Impact webview/workbench.
-
-Goal:
-When a user clicks any Backend Impact CodeLens action, open or reveal a single interactive webview panel titled “Quartz Backend Impact”. The webview should render a structured, clickable report for the selected Python symbol and file instead of only opening a .md file.
+Please add a webview message/action bridge so users can click items in the Backend Impact webview and trigger extension actions.
 
 Requirements:
 
-1. CodeLens behavior
-- Keep the existing CodeLens labels:
-  - Analyze Impact
-  - Trace Sandra Access
-  - Recommend Tests
-  - Generate Test
-- Clicking any CodeLens should call a command with symbol context:
-  - filePath
-  - workspaceRelativePath
-  - symbolName
-  - symbolType
-  - startLine
-  - endLine
-  - selected action
-- Do not open a Markdown file as the primary action.
-- Markdown should only be available through an Export Markdown action.
+1. Webview actions
+Add message types for:
+- openSource
+- openLocation
+- revealSymbol
+- openImport
+- openTestCandidate
+- generateTestScaffold
+- copyMarkdown
+- exportMarkdown
+- refreshAnalysis
+- showReferences
+- showCallHierarchy
 
-2. Add webview panel
-Create a reusable webview panel, for example:
-- BackendImpactWebviewPanel
-- BackendImpactReportView.tsx if React webviews are used
-- backendImpactMessages.ts for message types
+2. Source navigation
+Any symbol, import, Sandra access item, or line-numbered report entry should be clickable.
+When clicked, the extension should open the original Python file at the correct line and column.
 
-The panel should have sections or tabs:
-- Overview
-- Quartz Context
-- Sandra Access
-- Imports
-- Recommended Tests
-- Validation Checklist
-- Raw Markdown / Export
+3. Focused symbol actions
+In the Overview tab, add buttons:
+- Open Source
+- Reveal Symbol
+- Show References
+- Show Call Hierarchy
+- Generate Test
+- Export Markdown
 
-3. Symbol-specific analysis
-- Analyze the selected symbol first.
-- Only show Sandra access inside the selected symbol where possible.
-- Include file-level context below the selected-symbol section.
-- If symbol-specific filtering is not possible, clearly label the result as file-level analysis.
-
-4. Interactive code navigation
-In the webview, any file, symbol, import, Sandra operation, or test candidate should be clickable.
-Implement webview messages for:
-- openLocation(filePath, line, column?)
-- openFile(filePath)
-- revealSymbol(filePath, startLine)
-- openTestCandidate(filePath)
-- copyMarkdown()
-- exportMarkdown()
-- generateTestScaffold()
-
-Opening a location should open the original Python file at the exact line.
-
-5. Report content
-The Overview section should show:
-- focused symbol name
-- symbol type
-- line range
-- file/module name
-- risk level: low/medium/high
-- short summary
-
-The Quartz Context section should show:
-- workspace path
-- source cache path if detected
-- module path
-- train/stage/source layer if available
-- context warnings if unresolved
-
-The Sandra Access section should show:
-- operation type: read/write/create/update/delete/traversal/unknown
-- expression text
-- line number
-- containing symbol
-- confidence level
+4. Sandra Access actions
+In the Sandra Access tab, each operation row should show:
+- operation type
 - risk level
-- clickable source link
+- confidence
+- line number
+- expression
+- containing symbol
 
-Detect and classify patterns such as:
-- db.readobj(...)
-- db.read(...)
-- db.read_or_new(...)
-- obj.write()
-- sandra.nameRange(...)
-- sandra.walk(...)
-- save*Object(...)
-- saveOnMessageObject(...)
-- write/update/delete/remove/rename/move/clear/overwrite calls
+Each row should support:
+- Open Line
+- Copy Expression
+- Add to Validation Checklist
 
-The Imports section should show:
-- internal/project imports
-- external imports
-- unresolved imports
-- clickable resolved import locations where available
+5. Imports actions
+In the Imports tab, each import should support:
+- Open Resolved Module if available
+- Copy Import
+- Mark unresolved if not resolved
 
-The Recommended Tests section should show:
-- existing candidate test files if found
-- suggested test file path if none found
-- suggested pytest test case names
-- reasons for each recommendation
+If import resolution is not available yet, keep the action disabled and show “Resolution unavailable.”
 
-The Validation Checklist section should show actionable items:
-- review callers of selected symbol
-- confirm imported collaborators resolve in target runtime
-- run or add recommended tests
-- validate Sandra write/read behavior if detected
-- confirm source layer/train context
-- review error handling/logging around risky operations
+6. Recommended Tests actions
+In the Recommended Tests tab:
+- Show suggested test file path
+- Show suggested pytest test case names
+- Add buttons:
+  - Generate Scaffold
+  - Copy Test Plan
+  - Open Existing Test File if found
 
-6. Generate Test action
-- Generate Test should not simply open a report.
-- It should generate a pytest scaffold for the selected symbol.
-- Open the scaffold in a new unsaved editor or ask the user to choose an existing test file.
-- Never overwrite existing tests silently.
-- Include TODOs for arranging inputs, mocking Sandra/backend dependencies, calling the selected function, and asserting expected behavior.
+7. Generate Test behavior
+Generate Test should create a pytest scaffold for the selected symbol.
+Open it in a new unsaved editor or ask the user to choose an existing test file.
+Never overwrite existing test files silently.
+Include TODOs for inputs, mocks, Sandra/backend dependencies, function call, and assertions.
 
-7. Export Markdown
-- Add an Export Markdown button in the webview.
-- Export should create the markdown summary only when explicitly requested.
-- The generated markdown should match the webview content and include clickable source references where possible.
+8. Export Markdown
+Raw Markdown should remain available, but markdown files should only be opened when the user clicks Export Markdown.
+CodeLens clicks should not directly open markdown files.
 
-8. Safety
-- Do not execute backend Python code.
-- Do not automatically query Sandra.
-- Do not mutate Sandra, source cache, or workspace files unless the user explicitly confirms generating/inserting a test scaffold.
-- Keep all backend impact analysis static/read-only.
+9. Refresh
+Add a Refresh Analysis button in the webview.
+It should rerun analysis for the same file/symbol/action and update the panel.
 
-9. UX
-- Reuse existing webview CSP, nonce, styling, and message handling patterns from the Quartz extension.
-- Support dark/light themes.
-- Avoid giant wall-of-text reports.
-- Make the report scannable with cards, collapsible sections, or tabs.
-- Show empty states such as:
-  - No Sandra access detected in selected symbol
-  - No related tests found
-  - Quartz context could not be resolved
-  - Import resolution unavailable
+10. Safety
+Do not execute backend Python code.
+Do not query or mutate Sandra automatically.
+Do not modify workspace files except when user explicitly confirms test scaffold insertion.
 
-10. Backward compatibility
-- Existing analyzer/scanner modules should remain reusable.
-- The markdown report generator can remain, but it should be called only by Export Markdown.
-- The CodeLens command wiring should be updated to open the webview.
+11. UX
+Make rows visually clickable.
+Use buttons or links consistently.
+Support dark/light themes.
+Show disabled actions with clear tooltip text when data is unavailable.
